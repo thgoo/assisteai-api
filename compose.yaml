@@ -1,0 +1,24 @@
+# Local Postgres for development and the contract suite (TARGET=new).
+#   bun run db:up && bun run db:migrate && bun run db:seed
+name: assisteai
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: assisteai-postgres
+    environment:
+      POSTGRES_USER: assisteai
+      POSTGRES_PASSWORD: assisteai
+      POSTGRES_DB: assisteai
+    ports:
+      - "127.0.0.1:55432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U assisteai -d assisteai"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
+
+volumes:
+  postgres-data:

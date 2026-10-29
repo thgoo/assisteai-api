@@ -5,7 +5,11 @@ import { LOG_LEVELS } from '~/logger';
 
 const commaSeparated = z.string().transform(value => value.split(',').map(item => item.trim()).filter(Boolean));
 
-const envSchema = z.object({
+const databaseEnvSchema = z.object({
+  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+});
+
+const envSchema = databaseEnvSchema.extend({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   LOG_LEVEL: z.enum(LOG_LEVELS).optional(),
@@ -18,13 +22,20 @@ export interface Config {
   port: number;
   log: { level: LogLevel; format: LogFormat };
   corsOrigins: string[];
+  database: DatabaseConfig;
+}
+
+export interface DatabaseConfig {
+  url: string;
+}
+
+/** Only the database settings, for tools that don't serve HTTP (migrations, seed, ETL). */
+export function loadDatabaseConfig(env: Record<string, string | undefined> = process.env): DatabaseConfig {
+  return { url: parse(databaseEnvSchema, env).DATABASE_URL };
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
-  const result = envSchema.safeParse(env);
-  if (!result.success) throw new Error(`Invalid environment variables:\n${z.prettifyError(result.error)}`);
-
-  const { NODE_ENV, PORT, LOG_LEVEL, CORS_ORIGINS } = result.data;
+  const { NODE_ENV, PORT, LOG_LEVEL, CORS_ORIGINS, DATABASE_URL } = parse(envSchema, env);
   const isProduction = NODE_ENV === 'production';
   return {
     env: NODE_ENV,
@@ -34,5 +45,13 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       format: isProduction ? 'json' : 'pretty',
     },
     corsOrigins: CORS_ORIGINS,
+    database: { url: DATABASE_URL },
   };
+}
+
+/** Empty values (`LOG_LEVEL=` in a .env file) count as unset, so defaults apply. */
+function parse<T extends z.ZodType>(schema: T, env: Record<string, string | undefined>): z.output<T> {
+  const result = schema.safeParse(Object.fromEntries(Object.entries(env).filter(([, value]) => value !== '')));
+  if (!result.success) throw new Error(`Invalid environment variables:\n${z.prettifyError(result.error)}`);
+  return result.data;
 }

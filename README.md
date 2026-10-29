@@ -8,8 +8,14 @@ The plan and the step checklist live in `../assisteai-back/docs/rewrite/` (start
 ```sh
 bun install
 cp .env.example .env              # Bun loads .env automatically
+bun run db:up                     # Postgres 18 on 127.0.0.1:55432 (compose.yaml)
+bun run db:migrate                # apply drizzle/ migrations
+bun run db:seed                   # replace the data with test/fixtures/dataset.ts (local databases only)
 bun run dev                       # http://127.0.0.1:3000, restarts on change
 ```
+
+Schema changes: edit `src/db/schema/`, then `bun run db:generate` and commit the new migration. CI fails when the
+schema and `drizzle/` disagree.
 
 ## Contract suite
 
@@ -20,7 +26,7 @@ Next.js frontend relies on; deliberate deviations of the new app are encoded per
 bun install
 bun run legacy:up                 # legacy PHP + MariaDB (seeded with test/fixtures/dataset.ts) + external API mock
 bun run test:contract             # TARGET=legacy, BASE_URL=http://127.0.0.1:8000 by default
-TARGET=new BASE_URL=http://127.0.0.1:3000 bun run test:contract
+TARGET=new BASE_URL=http://127.0.0.1:3000 RESET_DB_COMMAND='bun run db:seed' bun run test:contract
 bun run legacy:down               # also drops the database
 ```
 
