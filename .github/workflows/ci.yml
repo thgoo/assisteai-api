@@ -61,4 +61,5 @@ jobs:
         run: |
           bun run start &
           timeout 10 sh -c 'until curl -sf http://127.0.0.1:3000/health > /dev/null; do sleep 0.2; done'
-          bun test test/contract/http-conventions.test.ts test/contract/movies-list.test.ts
+          bun test test/contract/http-conventions.test.ts test/contract/movies-list.test.ts \
+            test/contract/movies-details.test.ts test/contract/movies-random.test.ts

@@ -33,9 +33,16 @@ export const movieListSchema = z.object({
   to: z.number().int().nullable(),
 });
 
+const laravelDate = z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/);
+
 const threadSchema = z.object({
   id: z.number().int(),
   rating: ratingLabel,
+  comment: z.string().nullable(),
+  user_id: z.number().int(),
+  movie_id: z.number().int(),
+  created_at: laravelDate,
+  updated_at: laravelDate,
 });
 
 const threadWithUserSchema = threadSchema.extend({

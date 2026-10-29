@@ -80,3 +80,8 @@ export function randomEligibleMovies(): FixtureMovie[] {
   return movies.filter(m =>
     m.backdropPath !== null && threadsOf(m.id).some(t => RANDOM_ELIGIBLE_RATINGS.includes(t.rating)));
 }
+
+/** Laravel's date serialization of a fixture timestamp: `2026-08-01T10:00:00.000000Z`. */
+export function laravelDate(iso: string): string {
+  return new Date(iso).toISOString().replace(/Z$/, '000Z');
+}

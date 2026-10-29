@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { get } from './support/http';
-import { averageLabel, backdropUrl, lastLabel, randomEligibleMovies, threadsOf } from './support/oracle';
+import { averageLabel, backdropUrl, label, lastLabel, randomEligibleMovies, threadsOf } from './support/oracle';
 import { randomMovieResponseSchema } from './support/schemas';
 
 const SAMPLES = 15;
@@ -24,6 +24,11 @@ describe('GET /movies/random', () => {
         average: averageLabel(movie.id),
         last: lastLabel(movie.id),
       });
+      expect(data.rating.list.map(t => ({ id: t.id, rating: t.rating })))
+        .toEqual(threadsOf(movie.id).map(t => ({ id: t.id, rating: label(t.rating) })));
+      // Threads come without their user here (the parsed data drops unknown keys, so check the raw body).
+      const raw = response.body as { data: { rating: { list: object[] } } };
+      expect(raw.data.rating.list.some(t => 'user' in t)).toBe(false);
     }
   });
 });

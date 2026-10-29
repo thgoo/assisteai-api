@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { get } from './support/http';
 import {
-  averageLabel, backdropUrl, label, lastLabel, movieById, posterUrl, threadsOf, userById,
+  averageLabel, backdropUrl, label, laravelDate, lastLabel, movieById, posterUrl, threadsOf, userById,
 } from './support/oracle';
-import { errorResponseSchema, movieDetailsResponseSchema } from './support/schemas';
+import { errorResponseSchema, movieDetailsResponseSchema, statusErrorSchema } from './support/schemas';
 import { byTarget, target } from './support/target';
 
 async function getDetails(id: number) {
@@ -45,6 +45,16 @@ describe('GET /movies/{id}', () => {
       })));
   });
 
+  test('each rating carries its comment, ids and Laravel-style dates', async () => {
+    const { data } = await getDetails(1);
+
+    expect(data.rating.list.map(t => ({
+      comment: t.comment, user_id: t.user_id, movie_id: t.movie_id, created_at: t.created_at,
+    }))).toEqual(threadsOf(1).map(t => ({
+      comment: t.comment, user_id: t.userId, movie_id: t.movieId, created_at: laravelDate(t.createdAt),
+    })));
+  });
+
   test('average rounds half away from zero (mean 2.5 → Legal), like PHP round()', async () => {
     const { data } = await getDetails(2);
     expect(data.rating.average).toBe('Legal');
@@ -63,6 +73,7 @@ describe('GET /movies/{id}', () => {
     const [firstThread] = (raw as { data: { rating: { list: { user: Record<string, unknown> }[] } } }).data.rating.list;
 
     expect('email' in (firstThread?.user ?? {})).toBe(byTarget({ legacy: true, new: false }));
+    if (target === 'new') expect(Object.keys(firstThread?.user ?? {})).toEqual(['name', 'avatar']);
   });
 
   test('a movie without ratings: 500 on legacy (Q-17), empty rating block on the new app', async () => {
@@ -76,6 +87,18 @@ describe('GET /movies/{id}', () => {
     expect(response.status).toBe(200);
     const { data } = movieDetailsResponseSchema.parse(response.body);
     expect(data.rating).toEqual({ count: 0, average: null, last: null, list: [] });
+  });
+
+  test('a non-numeric id: 500 on legacy (TypeError), the generic 404 on the new app', async () => {
+    const response = await get('/movies/abc');
+    const status = byTarget({ legacy: 500, new: 404 });
+
+    expect(response.status).toBe(status);
+    expect(statusErrorSchema.parse(response.body)).toEqual({
+      success: false,
+      status,
+      message: byTarget({ legacy: 'HTTP_INTERNAL_SERVER_ERROR', new: 'HTTP_NOT_FOUND' }),
+    });
   });
 
   test('an unknown id is an error: 200 on legacy, 404 on the new app (Q-03)', async () => {
