@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { bigint, customType, timestamp } from 'drizzle-orm/pg-core';
+import { textLiterals } from '~/db/sql';
 
 /** Identity primary key. "By default" lets the ETL and the seed keep the legacy ids. */
 export const id = () => bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity();
@@ -17,7 +18,7 @@ export const timestamps = {
 /** Case-insensitive text (the `citext` extension, created by the first migration). */
 export const citext = customType<{ data: string }>({ dataType: () => 'citext' });
 
-/** `column IN ('a', 'b')` for check constraints, which can't take bind parameters. Values are code constants. */
+/** `column IN ('a', 'b')` for check constraints. */
 export function oneOf(column: AnyPgColumn, values: readonly string[]) {
-  return sql`${column} IN (${sql.raw(values.map(value => `'${value}'`).join(', '))})`;
+  return sql`${column} IN (${textLiterals(values)})`;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { get } from './support/http';
-import { averageLabel, lastLabel, listedMovies, PAGE_SIZE, posterUrl, threadsOf } from './support/oracle';
+import { averageLabel, backdropUrl, lastLabel, listedMovies, PAGE_SIZE, posterUrl, threadsOf } from './support/oracle';
 import { movieListSchema } from './support/schemas';
 import { byTarget } from './support/target';
 
@@ -53,9 +53,12 @@ describe('GET /movies', () => {
         slug: movie.slug,
         category: movie.category,
         title: movie.title,
+        original_title: movie.originalTitle,
+        year: movie.year,
         genre: movie.genre,
         description: movie.description,
         poster_path: posterUrl(movie),
+        backdrop_path: backdropUrl(movie),
         average_rating: averageLabel(movie.id),
         last_rating: lastLabel(movie.id),
         rating_count: threadsOf(movie.id).length,
@@ -102,5 +105,19 @@ describe('GET /movies', () => {
     // doc 02 "Scope of v1": watch_later, imdb_link (Q-18) and last_thread are expensive or broken.
     const dropped = ['watch_later', 'imdb_link', 'last_thread'];
     expect(dropped.filter(key => keys.includes(key))).toEqual(byTarget({ legacy: dropped, new: [] }));
+  });
+
+  test('the paginator keeps the Laravel keys, except the localized `links` buttons (Q-27)', async () => {
+    const { raw } = await getPage('?page=1');
+    const keys = Object.keys(raw as object);
+
+    for (const key of ['first_page_url', 'last_page_url', 'path']) expect(keys).toContain(key);
+    expect(keys.includes('links')).toBe(byTarget({ legacy: true, new: false }));
+  });
+
+  test('a page parameter that isn\'t a positive integer means page 1, like Laravel', async () => {
+    const [invalid, firstPage] = await Promise.all([getPage('?page=abc'), getPage('?page=1')]);
+    expect(invalid.page.current_page).toBe(1);
+    expect(invalid.page.data).toEqual(firstPage.page.data);
   });
 });

@@ -1,13 +1,18 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { HTTPException } from 'hono/http-exception';
 import type { Logger } from '~/logger';
+import type { MovieService } from '~/movies/movie-service';
 import { createApp } from './app';
 import { ApiError, statusMessage } from './http/errors';
 
 function appThatThrows(error: Error) {
   const logError = mock();
   const logger: Logger = { debug: mock(), info: mock(), warn: mock(), error: logError, child: () => logger };
-  const app = createApp({ logger, corsOrigins: ['https://assisteai.com.br'] });
+  const app = createApp({
+    logger,
+    corsOrigins: ['https://assisteai.com.br'],
+    movieService: {} as MovieService,
+  });
   app.get('/throws', () => {
     throw error;
   });

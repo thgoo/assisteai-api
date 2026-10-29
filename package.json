@@ -30,6 +30,7 @@
     "typescript-eslint": "8.71.2"
   },
   "dependencies": {
+    "@hono/zod-validator": "0.9.1",
     "drizzle-orm": "0.45.4",
     "hono": "4.13.13",
     "postgres": "3.4.9",

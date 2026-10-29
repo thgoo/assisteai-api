@@ -70,7 +70,8 @@ export function listedMovies(): FixtureMovie[] {
   return movies
     .map(m => ({ movie: m, last: latest(threadsOf(m.id)) }))
     .filter((entry): entry is { movie: FixtureMovie; last: FixtureThread } => entry.last !== undefined)
-    .sort((a, b) => b.last.createdAt.localeCompare(a.last.createdAt))
+    // Legacy has no tie-breaker (Q-25); the new app breaks ties by id. The dataset has no ties, so both agree.
+    .sort((a, b) => b.last.createdAt.localeCompare(a.last.createdAt) || b.movie.id - a.movie.id)
     .map(entry => entry.movie);
 }
 
