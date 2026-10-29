@@ -1,7 +1,8 @@
 # CLAUDE.md
 
-API of AssisteAí (Bun + Hono + PostgreSQL). The API design (doc 05), the frontend changes it implies (doc 06) and the
-step checklist (doc 04) live in `../assisteai-back/docs/rewrite/`. Follow the "How we work" section of its `README.md`.
+API of AssisteAí (Bun + Hono + PostgreSQL). The API design (doc 05) and the step checklist (doc 04) live in
+`../assisteai-back/docs/rewrite/`; follow the "How we work" section of its `README.md`. The frontend changes the API
+implies: `../assisteai-next/docs/new-api-migration.md`.
 Code conventions: doc 02, "Code conventions".
 
 - This codebase is self-contained: no compatibility layers or references to previous systems. Design from doc 05.
