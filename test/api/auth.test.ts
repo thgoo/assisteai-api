@@ -6,24 +6,12 @@ import { get, post, sessionCookie } from './support/http';
 import { googleIdToken } from './support/mock';
 import { userById } from './support/oracle';
 import { problemSchema, userResponseSchema } from './support/schemas';
+import { sessionFor, signIn } from './support/session';
 
 const ana = userById(1);
 const anaAtGoogle: GoogleAccount = {
   sub: ana.googleSub ?? '', email: ana.email, name: ana.name, picture: ana.avatarUrl ?? undefined,
 };
-
-async function signIn(account: GoogleAccount, overrides: Record<string, unknown> = {}) {
-  return post('/auth/google', { json: { credential: await googleIdToken(account, overrides) } });
-}
-
-/** Signs in and returns the session cookie value. */
-async function sessionFor(account: GoogleAccount): Promise<string> {
-  const response = await signIn(account);
-  expect(response.status).toBe(200);
-  const cookie = sessionCookie(response);
-  if (!cookie) throw new Error('No session cookie');
-  return cookie.value;
-}
 
 async function me(session?: string) {
   return get('/me', session === undefined ? {} : { session });

@@ -6,8 +6,13 @@ import { UserRepository } from '~/auth/user-repository';
 import { loadConfig } from '~/config';
 import { createDatabase } from '~/db/client';
 import { SessionCookie } from '~/http/session-cookie';
+import { TelegramClient } from '~/integrations/telegram/telegram-client';
+import { TmdbClient } from '~/integrations/tmdb/tmdb-client';
 import { ConsoleLogger } from '~/logger';
+import { MovieResolver } from '~/movies/movie-resolver';
 import { MovieService } from '~/movies/movie-service';
+import { NoopRatingNotifier, TelegramRatingNotifier } from '~/ratings/rating-notifier';
+import { RatingService } from '~/ratings/rating-service';
 
 /** Sessions end after 30 days without use. */
 const SESSION_IDLE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
@@ -17,10 +22,17 @@ const logger = new ConsoleLogger(config.log);
 const database = createDatabase(config.database.url);
 const { db } = database;
 
+const tmdb = new TmdbClient({ ...config.tmdb, timeoutMs: 5000 });
+const ratingNotifier = config.telegram
+  ? new TelegramRatingNotifier(new TelegramClient({ ...config.telegram, timeoutMs: 5000 }), config.frontendUrl, logger)
+  : new NoopRatingNotifier();
+if (!config.telegram) logger.warn('Telegram is not configured: new ratings won\'t be posted');
+
 const app = createApp({
   logger,
   corsOrigins: config.corsOrigins,
   movieService: new MovieService(db),
+  ratingService: new RatingService(db, new MovieResolver(db, tmdb), ratingNotifier),
   googleIdTokenVerifier: new GoogleIdTokenVerifier({ ...config.google, timeoutMs: 5000 }),
   sessionService: new SessionService(db, { idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS }),
   sessionCookie: new SessionCookie({ domain: config.sessionCookieDomain }),

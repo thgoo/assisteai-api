@@ -14,10 +14,10 @@ const FIXTURES: Record<string, string> = {
 };
 
 /** A client whose HTTP calls are answered from the fixtures (or with `status`), recording each request. */
-function clientWithFixtures(status?: number) {
+function clientWithFixtures(status?: number, baseUrl = 'https://tmdb.test') {
   const requests: Request[] = [];
   const client = new TmdbClient({
-    baseUrl: 'https://tmdb.test',
+    baseUrl,
     accessToken: 'token',
     timeoutMs: 1000,
     fetch: async request => {
@@ -27,7 +27,7 @@ function clientWithFixtures(status?: number) {
       const url = new URL(request.url);
       const language = url.searchParams.get('language');
       const fixture = FIXTURES[`${url.pathname}${language ? `?language=${language}` : ''}`] ?? 'movie-not-found';
-      const body = await Bun.file(new URL(`fixtures/${fixture}.json`, import.meta.url)).text();
+      const body = await Bun.file(new URL(`../../../test/fixtures/tmdb/${fixture}.json`, import.meta.url)).text();
       return new Response(body, { status: fixture === 'movie-not-found' ? 404 : 200 });
     },
   });
@@ -44,8 +44,8 @@ describe('TmdbClient', () => {
       imdbId: 'tt0137523',
       title: 'Clube da Luta',
       originalTitle: 'Fight Club',
-      year: '1999',
-      genre: 'Drama,Thriller',
+      year: 1999,
+      genres: ['Drama', 'Thriller'],
       description: expect.stringMatching(/^Um homem deprimido que sofre de insônia/) as string,
       originalDescription: expect.stringMatching(/^A ticking-time-bomb insomniac/) as string,
       posterPath: '/jSziioSwPVrOy9Yow3XhWIBDjq1.jpg',
@@ -61,8 +61,8 @@ describe('TmdbClient', () => {
       imdbId: 'tt0944947',
       title: 'Game of Thrones',
       originalTitle: 'Game of Thrones',
-      year: '2011',
-      genre: 'Sci-Fi & Fantasy,Drama,Action & Adventure',
+      year: 2011,
+      genres: ['Sci-Fi & Fantasy', 'Drama', 'Action & Adventure'],
     });
   });
 
@@ -76,6 +76,13 @@ describe('TmdbClient', () => {
       expect(request.url).not.toContain('api_key');
       expect(new URL(request.url).searchParams.get('append_to_response')).toBe('external_ids');
     }
+  });
+
+  test('keeps a path prefix in the base URL (e.g. a proxy or the test mock)', async () => {
+    const { client, requests } = clientWithFixtures(undefined, 'http://mock.test/api.themoviedb.org/');
+    await client.findByImdbId('tt0137523');
+
+    expect(new URL(requests[0]?.url ?? '').pathname).toBe('/api.themoviedb.org/3/find/tt0137523');
   });
 
   test('an unknown title is undefined', async () => {

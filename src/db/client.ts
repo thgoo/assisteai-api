@@ -12,3 +12,5 @@ export function createDatabase(url: string) {
     close: () => client.end(),
   };
 }
+
+export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];

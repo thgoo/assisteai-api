@@ -21,6 +21,18 @@ const envSchema = databaseEnvSchema.extend({
   GOOGLE_JWKS_URL: z.url().default('https://www.googleapis.com/oauth2/v3/certs'),
   /** e.g. `.assisteai.com.br`; unset → a host-only cookie (local development). */
   SESSION_COOKIE_DOMAIN: z.string().optional(),
+  /** API read access token (v4 auth). */
+  TMDB_API_TOKEN: z.string().min(1),
+  TMDB_API_URL: z.url().default('https://api.themoviedb.org'),
+  /** Links in notifications point here. */
+  FRONTEND_URL: z.url().default('https://assisteai.com.br'),
+  /** New ratings are posted to this Telegram chat; without a bot token, notifications are off. */
+  TELEGRAM_BOT_TOKEN: z.string().min(1).optional(),
+  TELEGRAM_CHAT_ID: z.string().min(1).optional(),
+  TELEGRAM_API_URL: z.url().default('https://api.telegram.org'),
+}).refine(env => (env.TELEGRAM_BOT_TOKEN === undefined) === (env.TELEGRAM_CHAT_ID === undefined), {
+  message: 'TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID go together',
+  path: ['TELEGRAM_CHAT_ID'],
 });
 
 export interface Config {
@@ -31,6 +43,9 @@ export interface Config {
   database: DatabaseConfig;
   google: { clientId: string; jwksUrl: string };
   sessionCookieDomain: string | undefined;
+  tmdb: { accessToken: string; baseUrl: string };
+  frontendUrl: string;
+  telegram: { botToken: string; chatId: string; baseUrl: string } | undefined;
 }
 
 export interface DatabaseConfig {
@@ -45,6 +60,7 @@ export function loadDatabaseConfig(env: Record<string, string | undefined> = pro
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const {
     NODE_ENV, PORT, LOG_LEVEL, CORS_ORIGINS, DATABASE_URL, GOOGLE_CLIENT_ID, GOOGLE_JWKS_URL, SESSION_COOKIE_DOMAIN,
+    TMDB_API_TOKEN, TMDB_API_URL, FRONTEND_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_API_URL,
   } = parse(envSchema, env);
   const isProduction = NODE_ENV === 'production';
   return {
@@ -58,6 +74,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     database: { url: DATABASE_URL },
     google: { clientId: GOOGLE_CLIENT_ID, jwksUrl: GOOGLE_JWKS_URL },
     sessionCookieDomain: SESSION_COOKIE_DOMAIN,
+    tmdb: { accessToken: TMDB_API_TOKEN, baseUrl: TMDB_API_URL },
+    frontendUrl: FRONTEND_URL.replace(/\/$/, ''),
+    telegram: TELEGRAM_BOT_TOKEN === undefined || TELEGRAM_CHAT_ID === undefined
+      ? undefined
+      : { botToken: TELEGRAM_BOT_TOKEN, chatId: TELEGRAM_CHAT_ID, baseUrl: TELEGRAM_API_URL },
   };
 }
 

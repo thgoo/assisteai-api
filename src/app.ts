@@ -4,20 +4,23 @@ import { requestId } from 'hono/request-id';
 import type { AuthDependencies } from '~/auth/routes';
 import type { Logger } from '~/logger';
 import type { MovieService } from '~/movies/movie-service';
+import type { RatingService } from '~/ratings/rating-service';
 import { createAuthRoutes } from '~/auth/routes';
 import { errorHandler, notFound } from '~/http/errors';
 import { originCheck } from '~/http/origin-check';
 import { requestLogger } from '~/logger';
 import { createMovieRoutes } from '~/movies/routes';
+import { createRatingRoutes } from '~/ratings/routes';
 
 export interface AppDependencies extends AuthDependencies {
   logger: Logger;
   corsOrigins: readonly string[];
   movieService: MovieService;
+  ratingService: RatingService;
 }
 
 /** Builds the HTTP app from its collaborators. Wiring them up is `index.ts`'s job, so tests can pass their own. */
-export function createApp({ logger, corsOrigins, movieService, ...auth }: AppDependencies): Hono {
+export function createApp({ logger, corsOrigins, movieService, ratingService, ...auth }: AppDependencies): Hono {
   const app = new Hono();
 
   app.use(requestId());
@@ -35,6 +38,7 @@ export function createApp({ logger, corsOrigins, movieService, ...auth }: AppDep
   app.get('/health', c => c.json({ status: 'ok' }));
   app.route('/', createAuthRoutes(auth));
   app.route('/movies', createMovieRoutes({ movieService }));
+  app.route('/ratings', createRatingRoutes({ ratingService, ...auth }));
 
   app.notFound(notFound);
   app.onError(errorHandler(logger));

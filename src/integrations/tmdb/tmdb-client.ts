@@ -12,10 +12,9 @@ export interface TmdbTitle extends TmdbReference {
   imdbId: string | null;
   title: string;
   originalTitle: string;
-  /** First four digits of the release (movies) or first air (TV) date. */
-  year: string | null;
-  /** Comma-separated genre names. */
-  genre: string;
+  /** Year of the release (movies) or first air (TV) date. */
+  year: number | null;
+  genres: string[];
   description: string;
   /** The en-US overview. */
   originalDescription: string | null;
@@ -90,7 +89,8 @@ export class TmdbClient {
 
   /** The parsed JSON body, `undefined` on 404. Other failures (network, timeout, 5xx, bad token) throw. */
   private async get(path: string, query: Record<string, string>): Promise<unknown> {
-    const url = new URL(path, this.options.baseUrl);
+    // Concatenated, not `new URL(path, base)`, which would drop a path prefix in the base URL.
+    const url = new URL(`${this.options.baseUrl.replace(/\/$/, '')}${path}`);
     for (const [key, value] of Object.entries(query)) url.searchParams.set(key, value);
 
     const response = await this.fetch(new Request(url.href, {
@@ -117,8 +117,8 @@ export function mergeTitle(reference: TmdbReference, pt: TitleResponse, en: Titl
     imdbId: en.external_ids.imdb_id ?? pt.external_ids.imdb_id,
     title,
     originalTitle,
-    year: date?.slice(0, 4) ?? null,
-    genre: en.genres.map(genre => genre.name).join(','),
+    year: date === null ? null : Number(date.slice(0, 4)),
+    genres: en.genres.map(genre => genre.name),
     description: pt.overview ?? en.overview ?? '',
     originalDescription: en.overview,
     posterPath: en.poster_path,

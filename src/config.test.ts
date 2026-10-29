@@ -4,7 +4,7 @@ import { loadConfig, loadDatabaseConfig } from './config';
 const CORS_ORIGINS = 'https://assisteai.com.br, https://beta2.assisteai.com.br';
 const DATABASE_URL = 'postgres://assisteai:assisteai@127.0.0.1:55432/assisteai';
 const GOOGLE_CLIENT_ID = '123-abc.apps.googleusercontent.com';
-const REQUIRED = { CORS_ORIGINS, DATABASE_URL, GOOGLE_CLIENT_ID };
+const REQUIRED = { CORS_ORIGINS, DATABASE_URL, GOOGLE_CLIENT_ID, TMDB_API_TOKEN: 'tmdb-token' };
 
 describe('loadConfig', () => {
   test('development defaults: port 3000, pretty debug logs', () => {
@@ -16,6 +16,9 @@ describe('loadConfig', () => {
       database: { url: DATABASE_URL },
       google: { clientId: GOOGLE_CLIENT_ID, jwksUrl: 'https://www.googleapis.com/oauth2/v3/certs' },
       sessionCookieDomain: undefined,
+      tmdb: { accessToken: 'tmdb-token', baseUrl: 'https://api.themoviedb.org' },
+      frontendUrl: 'https://assisteai.com.br',
+      telegram: undefined,
     });
   });
 
@@ -46,6 +49,12 @@ describe('loadConfig', () => {
   test('DATABASE_URL must be a Postgres URL', () => {
     const mysql = () => loadConfig({ ...REQUIRED, DATABASE_URL: 'mysql://root@localhost/assisteai' });
     expect(mysql).toThrow(/DATABASE_URL/);
+  });
+
+  test('Telegram needs both the bot token and the chat id', () => {
+    expect(() => loadConfig({ ...REQUIRED, TELEGRAM_BOT_TOKEN: 'bot' })).toThrow(/go together/);
+    expect(loadConfig({ ...REQUIRED, TELEGRAM_BOT_TOKEN: 'bot', TELEGRAM_CHAT_ID: '-100' }).telegram)
+      .toEqual({ botToken: 'bot', chatId: '-100', baseUrl: 'https://api.telegram.org' });
   });
 
   test('loadDatabaseConfig needs only DATABASE_URL', () => {
