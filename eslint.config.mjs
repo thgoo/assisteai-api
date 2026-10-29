@@ -68,8 +68,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ['**/*.mjs'],
+    files: ['**/*.mjs', '**/*.cjs'],
     ...tseslint.configs.disableTypeChecked,
+  },
+  {
+    // PM2 reads a CommonJS config.
+    files: ['**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs' },
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
   },
   {
     // The logger implementation, the test mock and scripts are the only places allowed to write to the console.
