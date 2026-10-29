@@ -56,17 +56,33 @@ crontab -e   # 30 4 * * * /var/www/assisteai-api/scripts/pg-backup.sh >> /home/e
 
 ### nginx
 
-A server block per hostname, with the TLS setup copied from the current `api.assisteai.com.br` vhost. Until the
-cutover, use a temporary hostname (e.g. `api-next.assisteai.com.br`, proxied in Cloudflare):
+TLS on this host is Let's Encrypt, managed by certbot (it adds the `listen 443`/certificate lines and the HTTP → HTTPS
+redirect to each vhost). Cloudflare proxies in front.
+
+`/etc/nginx/conf.d/<hostname>.conf`, before certbot:
 
 ```nginx
-location / {
-    proxy_pass http://127.0.0.1:3007;
-    proxy_set_header Host $host;
-    proxy_set_header X-Forwarded-For $remote_addr;   # the client (Cloudflare also sends CF-Connecting-IP)
-    proxy_set_header X-Forwarded-Proto $scheme;
+server {
+    listen 80;
+    listen [::]:80;
+    server_name api-next.assisteai.com.br;   # the temporary hostname; api.assisteai.com.br at the cutover
+
+    location / {
+        proxy_pass http://127.0.0.1:3007;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;   # Cloudflare's address; the API reads CF-Connecting-IP first
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }
 ```
+
+```sh
+sudo nginx -t && sudo nginx -s reload
+sudo certbot --nginx -d api-next.assisteai.com.br     # adds TLS and the redirect, like the other vhosts
+```
+
+For a new hostname, create its DNS record in Cloudflare as **DNS only** (grey cloud) until certbot has the
+certificate, then switch it to **Proxied**.
 
 ## Updates
 
@@ -102,10 +118,11 @@ the same commands (steps 3–4), on a fresh copy of the target database, and not
    **Go / no-go**: anything but a clean validation → unfreeze (undo step 2) and investigate.
 4. **Restart the API** on the migrated data: `pm2 restart api.assisteai.com.br`, then through the temporary hostname:
    `/health`, `/movies`, a few `/movies/:id`.
-5. **Switch**: point the `api.assisteai.com.br` vhost at the new API (the `location /` block above, replacing the PHP
-   handler), `sudo nginx -s reload`; deploy the new front build.
+5. **Switch**: in `/etc/nginx/conf.d/api.assisteai.com.br.conf` (keep a copy: `sudo cp …conf /root/`), replace
+   `root`, `index` and every `location` block with the `location /` proxy block above; keep the certbot lines.
+   `sudo nginx -t && sudo nginx -s reload`; deploy the new front build.
 6. **Smoke test** on the production hostnames: home (random movie), infinite list, a movie page, sign in with Google
    (an existing account lands on its own ratings), rate a title (the Telegram message shows up), sign out.
-7. **Rollback** (only if step 6 fails): restore the old vhost and the old front build, remove the freeze. Legacy data
+7. **Rollback** (only if step 6 fails): restore the copied vhost and the old front build, remove the freeze. Legacy data
    is untouched, but anything written on the new stack in between is lost, so decide quickly.
 8. After two quiet weeks: decommission the legacy app (S26) and keep the final dump.
