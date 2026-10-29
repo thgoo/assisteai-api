@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14   # keep in sync with production
+
+      - run: bun install --frozen-lockfile
+
+      - name: Type-check
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Unit tests
+        run: bun run test
+
+      # The contract files run here as their endpoints are implemented (doc 04, S12+).
+      - name: Contract tests against the new app
+        env:
+          CORS_ORIGINS: https://assisteai.com.br,https://beta2.assisteai.com.br
+          TARGET: new
+          BASE_URL: http://127.0.0.1:3000
+        run: |
+          bun run start &
+          timeout 10 sh -c 'until curl -sf http://127.0.0.1:3000/health > /dev/null; do sleep 0.2; done'
+          bun test test/contract/http-conventions.test.ts
