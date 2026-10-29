@@ -26,13 +26,16 @@ Next.js frontend relies on; deliberate deviations of the new app are encoded per
 bun install
 bun run legacy:up                 # legacy PHP + MariaDB (seeded with test/fixtures/dataset.ts) + external API mock
 bun run test:contract             # TARGET=legacy, BASE_URL=http://127.0.0.1:8000 by default
-TARGET=new BASE_URL=http://127.0.0.1:3000 RESET_DB_COMMAND='bun run db:seed' bun run test:contract
+TARGET=new BASE_URL=http://127.0.0.1:3000 RESET_DB_COMMAND='bun run db:seed' \
+  LEGACY_BASE_URL=http://127.0.0.1:8000 bun run test:contract   # + tokens across both apps
 bun run legacy:down               # also drops the database
 ```
 
 Tests that write (login, refresh, ratings) reset the database to the dataset before and after they run, through
 `RESET_DB_COMMAND` (default: `sh test/legacy-env/reset-db.sh`), so the suite can be rerun at will. External APIs
-(Google, TMDb, Telegram) are stubbed per test through the mock's control port (`MOCK_URL`).
+(Google, TMDb, Telegram) are stubbed per test through the mock's control port (`MOCK_URL`). The legacy app reaches
+the mock through Docker network aliases; the new app through `/<host>/` prefixes on the control port
+(`GOOGLE_API_URL=http://127.0.0.1:8080/www.googleapis.com`, see `.env.example`).
 
 The legacy env expects the PHP repo at `../assisteai-back` (override with `LEGACY_APP_DIR`). To explore production
 data instead of the fixtures: `bun run legacy:down && DUMP=/path/to/dump.sql.gz bun run legacy:up`.

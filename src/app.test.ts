@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { HTTPException } from 'hono/http-exception';
 import type { Logger } from '~/logger';
-import type { MovieService } from '~/movies/movie-service';
+import { unusedServices } from '~/test-support/unused-services';
 import { createApp } from './app';
 import { ApiError, statusMessage } from './http/errors';
 
@@ -11,7 +11,7 @@ function appThatThrows(error: Error) {
   const app = createApp({
     logger,
     corsOrigins: ['https://assisteai.com.br'],
-    movieService: {} as MovieService,
+    ...unusedServices,
   });
   app.get('/throws', () => {
     throw error;

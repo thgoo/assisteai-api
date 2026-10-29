@@ -8,7 +8,8 @@ export const id = () => bigint('id', { mode: 'number' }).primaryKey().generatedB
 
 export const foreignId = (name: string) => bigint(name, { mode: 'number' }).notNull();
 
-export const timestampTz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date' });
+/** Whole seconds, like legacy (MariaDB TIMESTAMP): the API serializes them as `…:SS.000000Z`. */
+export const timestampTz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date', precision: 0 });
 
 export const timestamps = {
   createdAt: timestampTz('created_at').notNull().defaultNow(),

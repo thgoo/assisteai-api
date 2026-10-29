@@ -1,6 +1,10 @@
 // Mock for the external APIs the legacy app calls. Docker network aliases point api.themoviedb.org,
 // api.telegram.org and www.googleapis.com here; HTTPS uses the throwaway CA from certs.sh.
 //
+// Outside Docker (the new app on the host or in CI), the same APIs answer on the control port under a prefix named
+// after the host: http://127.0.0.1:8080/www.googleapis.com/oauth2/v3/userinfo. Without /certs (no Docker), only the
+// control port listens.
+//
 // Control API (port 8080, published on the host):
 //   GET  /__requests        every request received since the last reset
 //   POST /__reset           clears recorded requests and runtime stubs
@@ -103,7 +107,21 @@ async function external(req: Request): Promise<Response> {
   return handler ? handler(r) : json({ error: `unexpected host ${r.host}` }, 502);
 }
 
+/** `/<host>/<path>` on the control port, recorded as if `<host>` had been called directly. */
+function prefixed(req: Request): Request | undefined {
+  const url = new URL(req.url);
+  const [, host, ...rest] = url.pathname.split('/');
+  if (host === undefined || !(host in externalHandlers)) return undefined;
+
+  const headers = new Headers(req.headers);
+  headers.set('host', host);
+  return new Request(`http://${host}/${rest.join('/')}${url.search}`, { method: req.method, headers, body: req.body });
+}
+
 async function control(req: Request): Promise<Response> {
+  const forwarded = prefixed(req);
+  if (forwarded) return external(forwarded);
+
   const { pathname } = new URL(req.url);
   const route = `${req.method} ${pathname}`;
 
@@ -130,7 +148,12 @@ async function control(req: Request): Promise<Response> {
   }
 }
 
-Bun.serve({ port: 80, fetch: external });
-Bun.serve({ port: 443, fetch: external, tls: { cert: Bun.file('/certs/mock.pem'), key: Bun.file('/certs/mock.key') } });
 Bun.serve({ port: 8080, fetch: control });
-console.log('mock listening on :80, :443 (TLS) and :8080 (control)');
+if (await Bun.file('/certs/mock.pem').exists()) {
+  Bun.serve({ port: 80, fetch: external });
+  const tls = { cert: Bun.file('/certs/mock.pem'), key: Bun.file('/certs/mock.key') };
+  Bun.serve({ port: 443, fetch: external, tls });
+  console.log('mock listening on :80, :443 (TLS) and :8080 (control + prefixed APIs)');
+} else {
+  console.log('mock listening on :8080 (control + prefixed APIs)');
+}

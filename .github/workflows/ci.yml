@@ -51,15 +51,21 @@ jobs:
       - name: Migrate and seed
         run: bun run db:migrate && bun run db:seed
 
-      # The contract files run here as their endpoints are implemented (doc 04, S12+).
+      # The contract files run here as their endpoints are implemented (doc 04, S12+). Outside Docker the mock
+      # serves the external APIs on its control port, under /<host>/.
       - name: Contract tests against the new app
         env:
           CORS_ORIGINS: https://assisteai.com.br,https://beta2.assisteai.com.br
+          JWT_SECRET: ci-jwt-secret-that-is-at-least-256-bits-long-0123456789
+          GOOGLE_API_URL: http://127.0.0.1:8080/www.googleapis.com
           TARGET: new
           BASE_URL: http://127.0.0.1:3000
+          MOCK_URL: http://127.0.0.1:8080
           RESET_DB_COMMAND: bun run db:seed
         run: |
+          bun test/legacy-env/mock/server.ts &
           bun run start &
           timeout 10 sh -c 'until curl -sf http://127.0.0.1:3000/health > /dev/null; do sleep 0.2; done'
           bun test test/contract/http-conventions.test.ts test/contract/movies-list.test.ts \
-            test/contract/movies-details.test.ts test/contract/movies-random.test.ts
+            test/contract/movies-details.test.ts test/contract/movies-random.test.ts \
+            test/contract/auth-login.test.ts test/contract/auth-session.test.ts

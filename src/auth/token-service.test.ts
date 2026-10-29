@@ -40,7 +40,10 @@ describe('TokenService', () => {
   });
 
   test('authenticate: the user id of an issued token', async () => {
-    expect(await tokens.authenticate(await tokens.issue(7, 'http://api.test/auth/login/google'))).toBe(7);
+    const issued = await tokens.issue(7, 'http://api.test/auth/login/google');
+
+    expect(issued.expiresInSeconds).toBe(TTL);
+    expect(await tokens.authenticate(issued.token)).toBe(7);
   });
 
   test('authenticate: refuses expired and revoked tokens', async () => {
@@ -55,17 +58,17 @@ describe('TokenService', () => {
     const fresh = await tokens.refresh(old, ISSUER);
     const [oldClaims, newClaims] = await Promise.all([
       jwt.verify(old, { allowExpired: true }),
-      jwt.verify(fresh ?? ''),
+      jwt.verify(fresh?.token ?? ''),
     ]);
 
     expect(newClaims).toMatchObject({ sub: '7', iat: oldClaims?.iat, iss: ISSUER });
     expect(revokedTokens.revoked.get('jti-1')).toEqual(new Date(((oldClaims?.iat ?? 0) + WINDOW) * 1000));
-    expect(await tokens.authenticate(fresh ?? '')).toBe(7);
+    expect(await tokens.authenticate(fresh?.token ?? '')).toBe(7);
   });
 
   test('refresh: each token can be refreshed only once', async () => {
     const old = await tokenIssuedAgo(0);
-    expect(await tokens.refresh(old, ISSUER)).toBeString();
+    expect(await tokens.refresh(old, ISSUER)).toMatchObject({ expiresInSeconds: TTL });
     expect(await tokens.refresh(old, ISSUER)).toBeUndefined();
   });
 

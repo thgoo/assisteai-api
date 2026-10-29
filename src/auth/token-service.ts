@@ -2,6 +2,11 @@ import type { LegacyJwt } from './legacy-jwt';
 import type { RevokedTokens } from './revoked-token-repository';
 import { nowInSeconds } from './legacy-jwt';
 
+export interface IssuedToken {
+  token: string;
+  expiresInSeconds: number;
+}
+
 export interface TokenServiceOptions {
   /** How long after the first login (`iat`) a token can still be refreshed. Legacy: 14 days. */
   refreshWindowSeconds: number;
@@ -14,8 +19,8 @@ export class TokenService {
     private readonly options: TokenServiceOptions,
   ) {}
 
-  issue(userId: number, issuer: string): Promise<string> {
-    return this.jwt.sign({ sub: userId, iss: issuer });
+  async issue(userId: number, issuer: string): Promise<IssuedToken> {
+    return this.issued(await this.jwt.sign({ sub: userId, iss: issuer }));
   }
 
   /** The user id of a valid, unexpired, unrevoked token, or `undefined`. */
@@ -29,7 +34,7 @@ export class TokenService {
    * Swaps a token (expired or not) for a new one while inside the refresh window, keeping the original `iat`.
    * The old token is revoked, so each token can be refreshed once. `undefined` when the token can't be refreshed.
    */
-  async refresh(token: string, issuer: string): Promise<string | undefined> {
+  async refresh(token: string, issuer: string): Promise<IssuedToken | undefined> {
     const claims = await this.jwt.verify(token, { allowExpired: true });
     if (!claims) return undefined;
 
@@ -37,6 +42,10 @@ export class TokenService {
     if (windowEnd <= nowInSeconds()) return undefined;
     if (!await this.revokedTokens.revoke(claims.jti, new Date(windowEnd * 1000))) return undefined;
 
-    return this.jwt.sign({ sub: Number(claims.sub), iss: issuer, iat: claims.iat });
+    return this.issued(await this.jwt.sign({ sub: Number(claims.sub), iss: issuer, iat: claims.iat }));
+  }
+
+  private issued(token: string): IssuedToken {
+    return { token, expiresInSeconds: this.jwt.ttlSeconds };
   }
 }

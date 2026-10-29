@@ -4,6 +4,10 @@ import { sign, verify } from 'hono/jwt';
 import { randomInt } from 'node:crypto';
 import { z } from 'zod';
 
+/** Legacy settings: tokens live 2 hours and can be refreshed for 14 days after the first login. */
+export const TOKEN_TTL_SECONDS = 2 * 60 * 60;
+export const REFRESH_WINDOW_SECONDS = 14 * 24 * 60 * 60;
+
 /** sha1("App\Models\User"): jwt-auth's model claim. Tokens for other models are rejected, like legacy. */
 export const LEGACY_PRV = '23bd5c8949f600adb39e701c400872db7a5976f7';
 
@@ -28,6 +32,10 @@ const JTI_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
 
 export class LegacyJwt {
   constructor(private readonly options: LegacyJwtOptions) {}
+
+  get ttlSeconds(): number {
+    return this.options.ttlSeconds;
+  }
 
   /**
    * Signs a token for `sub`. `iss` is the URL of the issuing request (legacy uses the full request URL).

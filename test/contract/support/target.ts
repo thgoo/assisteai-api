@@ -11,6 +11,9 @@ const env = z.object({
   TARGET: z.enum(['legacy', 'new']).default('legacy'),
   JWT_SECRET: z.string().min(32).default('local-legacy-env-jwt-secret-must-be-at-least-256-bits-long-0123456789'),
   RESET_DB_COMMAND: z.string().default('sh test/legacy-env/reset-db.sh'),
+  /** With TARGET=new: where the legacy app runs, to check tokens across both apps (rollback safety). */
+  LEGACY_BASE_URL: z.url().optional(),
+  LEGACY_RESET_DB_COMMAND: z.string().default('sh test/legacy-env/reset-db.sh'),
 }).parse(process.env);
 
 export type Target = typeof env.TARGET;
@@ -20,6 +23,8 @@ export const mockUrl = env.MOCK_URL;
 export const target: Target = env.TARGET;
 export const jwtSecret = env.JWT_SECRET;
 export const resetDbCommand = env.RESET_DB_COMMAND;
+export const legacyBaseUrl = env.LEGACY_BASE_URL;
+export const legacyResetDbCommand = env.LEGACY_RESET_DB_COMMAND;
 
 /** Picks the expectation for the current target. Every call site documents the quirk (Q-xx) it encodes. */
 export function byTarget<T>(expectations: Record<Target, T>): T {

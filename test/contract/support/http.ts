@@ -10,6 +10,8 @@ interface RequestOptions {
   token?: string;
   json?: unknown;
   headers?: Record<string, string>;
+  /** Another implementation than the target (cross-implementation tests). */
+  baseUrl?: string;
 }
 
 export async function request(method: string, path: string, options: RequestOptions = {}): Promise<ApiResponse> {
@@ -17,7 +19,7 @@ export async function request(method: string, path: string, options: RequestOpti
   if (options.token !== undefined) headers.set('Authorization', `Bearer ${options.token}`);
   if (options.json !== undefined) headers.set('Content-Type', 'application/json');
 
-  const response = await fetch(new URL(path, baseUrl), {
+  const response = await fetch(new URL(path, options.baseUrl ?? baseUrl), {
     method,
     headers,
     body: options.json === undefined ? undefined : JSON.stringify(options.json),
