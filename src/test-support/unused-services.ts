@@ -7,4 +7,4 @@ export const unusedServices = new Proxy({}, {
       throw new Error(`Unexpected call: ${String(name)}.${String(method)}()`);
     },
   }),
-}) as Pick<AppDependencies, 'movieService'>;
+}) as Omit<AppDependencies, 'corsOrigins' | 'logger'>;

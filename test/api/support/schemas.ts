@@ -46,3 +46,7 @@ export const movieListSchema = z.strictObject({
   data: z.array(movieSummarySchema),
   nextCursor: z.string().nullable(),
 });
+
+export const userResponseSchema = z.strictObject({
+  user: z.strictObject({ name: z.string(), email: z.email(), avatarUrl: z.url().nullable() }),
+});

@@ -2,11 +2,13 @@ import { describe, expect, test } from 'bun:test';
 import type { MovieService } from './movie-service';
 import { createApp } from '~/app';
 import { ConsoleLogger } from '~/logger';
+import { unusedServices } from '~/test-support/unused-services';
 
 function appWith(movieService: Partial<MovieService>) {
   return createApp({
     logger: new ConsoleLogger({ level: 'error', format: 'json' }),
     corsOrigins: ['https://assisteai.com.br'],
+    ...unusedServices,
     movieService: movieService as MovieService,
   });
 }

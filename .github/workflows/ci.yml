@@ -54,6 +54,8 @@ jobs:
       - name: API tests
         env:
           CORS_ORIGINS: https://assisteai.com.br,https://beta2.assisteai.com.br
+          GOOGLE_CLIENT_ID: ci-client.apps.googleusercontent.com
+          GOOGLE_JWKS_URL: http://127.0.0.1:8080/www.googleapis.com/oauth2/v3/certs
         run: |
           bun run mock &
           bun run start &

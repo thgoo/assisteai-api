@@ -1,6 +1,6 @@
 // Client for the external API mock's control port (test/mock/server.ts).
 import { z } from 'zod';
-import { mockUrl } from './env';
+import { googleClientId, mockUrl } from './env';
 
 const recordedSchema = z.array(z.object({
   method: z.string(),
@@ -29,6 +29,24 @@ async function control(method: string, path: string, body?: unknown): Promise<un
 
 export async function resetMock(): Promise<void> {
   await control('POST', '/__reset');
+}
+
+export interface GoogleAccount {
+  sub: string;
+  email: string;
+  name: string;
+  picture?: string;
+}
+
+/** A Google ID token for this account, signed with the keys the mock publishes as Google's. */
+export async function googleIdToken(account: GoogleAccount, overrides: Record<string, unknown> = {}): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const claims = {
+    iss: 'https://accounts.google.com', aud: googleClientId, email_verified: true, iat: now, exp: now + 3600,
+    ...account, ...overrides,
+  };
+  const { idToken } = z.object({ idToken: z.string() }).parse(await control('POST', '/__google/id-token', { claims }));
+  return idToken;
 }
 
 /** Makes TMDb answer `body` for this path (and these query parameters, if given). */

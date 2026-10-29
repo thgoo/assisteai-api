@@ -3,7 +3,8 @@ import { loadConfig, loadDatabaseConfig } from './config';
 
 const CORS_ORIGINS = 'https://assisteai.com.br, https://beta2.assisteai.com.br';
 const DATABASE_URL = 'postgres://assisteai:assisteai@127.0.0.1:55432/assisteai';
-const REQUIRED = { CORS_ORIGINS, DATABASE_URL };
+const GOOGLE_CLIENT_ID = '123-abc.apps.googleusercontent.com';
+const REQUIRED = { CORS_ORIGINS, DATABASE_URL, GOOGLE_CLIENT_ID };
 
 describe('loadConfig', () => {
   test('development defaults: port 3000, pretty debug logs', () => {
@@ -13,6 +14,8 @@ describe('loadConfig', () => {
       log: { level: 'debug', format: 'pretty' },
       corsOrigins: ['https://assisteai.com.br', 'https://beta2.assisteai.com.br'],
       database: { url: DATABASE_URL },
+      google: { clientId: GOOGLE_CLIENT_ID, jwksUrl: 'https://www.googleapis.com/oauth2/v3/certs' },
+      sessionCookieDomain: undefined,
     });
   });
 

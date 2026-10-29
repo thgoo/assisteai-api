@@ -7,19 +7,18 @@ export interface ApiResponse {
 }
 
 interface RequestOptions {
-  token?: string;
+  /** The session cookie's value. */
+  session?: string;
   json?: unknown;
   headers?: Record<string, string>;
-  /** Another implementation than the target (cross-implementation tests). */
-  baseUrl?: string;
 }
 
 export async function request(method: string, path: string, options: RequestOptions = {}): Promise<ApiResponse> {
   const headers = new Headers({ Accept: 'application/json', ...options.headers });
-  if (options.token !== undefined) headers.set('Authorization', `Bearer ${options.token}`);
+  if (options.session !== undefined) headers.set('Cookie', `session=${options.session}`);
   if (options.json !== undefined) headers.set('Content-Type', 'application/json');
 
-  const response = await fetch(new URL(path, options.baseUrl ?? baseUrl), {
+  const response = await fetch(new URL(path, baseUrl), {
     method,
     headers,
     body: options.json === undefined ? undefined : JSON.stringify(options.json),
@@ -42,4 +41,12 @@ function parseJson(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+/** The `session` cookie a response sets: its value and attributes. */
+export function sessionCookie(response: ApiResponse): { value: string; attributes: string } | undefined {
+  const cookie = response.headers.getSetCookie().find(header => header.startsWith('session='));
+  if (cookie === undefined) return undefined;
+  const [pair = '', ...attributes] = cookie.split(';').map(part => part.trim());
+  return { value: pair.slice('session='.length), attributes: attributes.join('; ') };
 }

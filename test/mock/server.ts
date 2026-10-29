@@ -1,4 +1,4 @@
-// Stand-in for the external APIs the app calls (TMDb, Telegram), for the API tests and local development.
+// Stand-in for the external APIs the app calls (Google, TMDb, Telegram), for the API tests and local development.
 // Each API answers under a prefix named after its host, e.g. http://127.0.0.1:8080/api.themoviedb.org/3/movie/603,
 // so the app only needs its base URLs pointed here.
 //
@@ -6,8 +6,20 @@
 //   GET  /__requests   every request received since the last reset
 //   POST /__reset      clears recorded requests and stubs
 //   POST /__tmdb       {path, query?, status?, body} → response for a TMDb path, e.g. "/3/movie/603"
+//   POST /__google/id-token  {claims, kid?} → { idToken }: a Google ID token signed with the key the mock publishes
+//                            at /www.googleapis.com/oauth2/v3/certs (generated at startup, never stored)
 // Anything not stubbed answers like the real API would for an unknown resource.
 //   bun test/mock/server.ts   (port: MOCK_PORT, default 8080)
+
+import { sign } from 'hono/jwt';
+
+const GOOGLE_KEY_ID = 'mock-key';
+const googleKeys = await crypto.subtle.generateKey(
+  { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+  true,
+  ['sign', 'verify'],
+);
+const googlePublicJwk = await crypto.subtle.exportKey('jwk', googleKeys.publicKey);
 
 interface Recorded {
   at: string;
@@ -68,6 +80,12 @@ async function record(req: Request): Promise<Recorded> {
   return entry;
 }
 
+function google(r: Recorded): Response {
+  if (r.path !== '/oauth2/v3/certs') return json({ error: 'not_found' }, 404);
+  const { kty, n, e } = googlePublicJwk;
+  return json({ keys: [{ kty, n, e, alg: 'RS256', use: 'sig', kid: GOOGLE_KEY_ID }] });
+}
+
 function tmdb(r: Recorded): Response {
   const matches = (stub: TmdbStub) =>
     stub.path === r.path && Object.entries(stub.query).every(([key, value]) => r.query[key] === value);
@@ -84,6 +102,7 @@ function telegram(r: Recorded): Response {
 }
 
 const externalHandlers: Record<string, (r: Recorded) => Response> = {
+  'www.googleapis.com': google,
   'api.themoviedb.org': tmdb,
   'api.telegram.org': telegram,
 };
@@ -119,6 +138,11 @@ async function control(req: Request): Promise<Response> {
       requests = [];
       tmdbStubs = [];
       return json({ ok: true });
+    case 'POST /__google/id-token': {
+      const { claims, kid = GOOGLE_KEY_ID } = (await req.json()) as { claims: Record<string, unknown>; kid?: string };
+      const privateJwk = { ...(await crypto.subtle.exportKey('jwk', googleKeys.privateKey)), kid };
+      return json({ idToken: await sign(claims, privateJwk, 'RS256') });
+    }
     case 'POST /__tmdb': {
       const { path, query = {}, status = 200, body } = (await req.json()) as Partial<TmdbStub> & { path: string };
       tmdbStubs.push({ path, query, status, body });
