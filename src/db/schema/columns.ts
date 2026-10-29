@@ -3,12 +3,12 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 import { bigint, customType, timestamp } from 'drizzle-orm/pg-core';
 import { textLiterals } from '~/db/sql';
 
-/** Identity primary key. "By default" lets the ETL and the seed keep the legacy ids. */
+/** Identity primary key. "By default" accepts explicit ids, so imported and seeded rows keep theirs. */
 export const id = () => bigint('id', { mode: 'number' }).primaryKey().generatedByDefaultAsIdentity();
 
 export const foreignId = (name: string) => bigint(name, { mode: 'number' }).notNull();
 
-/** Whole seconds, like legacy (MariaDB TIMESTAMP): the API serializes them as `…:SS.000000Z`. */
+/** Whole seconds: nothing needs sub-second precision, and imported data has none. */
 export const timestampTz = (name: string) => timestamp(name, { withTimezone: true, mode: 'date', precision: 0 });
 
 export const timestamps = {

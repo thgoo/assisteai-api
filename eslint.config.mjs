@@ -72,8 +72,8 @@ export default tseslint.config(
     ...tseslint.configs.disableTypeChecked,
   },
   {
-    // The logger implementation and dev scripts are the only places allowed to write to the console.
-    files: ['src/logger/console-logger.ts', 'test/legacy-env/**', 'scripts/**'],
+    // The logger implementation, the test mock and scripts are the only places allowed to write to the console.
+    files: ['src/logger/console-logger.ts', 'test/mock/**', 'scripts/**'],
     rules: {
       'no-console': 'off',
     },

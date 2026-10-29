@@ -1,6 +1,5 @@
-// The contract test dataset: the single source for the legacy MariaDB seed (test/legacy-env/seed.ts) and, later,
-// the Postgres seed. It describes the data as both systems see it after the ETL, so there are no soft-deleted rows.
-// Every case the contract tests rely on is called out next to the row that provides it.
+// The test dataset: the single source for the seed (scripts/seed.ts) and for the expectations of the API tests
+// (test/api/support/oracle.ts). Every case a test relies on is called out next to the row that provides it.
 
 export const RATING_KEYS = ['STAY_AWAY', 'VERY_BAD', 'BAD', 'COOL', 'GOOD', 'VERY_GOOD', 'UNMISSABLE'] as const;
 export type RatingKey = (typeof RATING_KEYS)[number];
@@ -9,10 +8,9 @@ export interface FixtureUser {
   id: number;
   name: string;
   email: string;
-  avatar: string | null;
-  theme: string | null;
-  provider: 'facebook' | 'google';
-  providerId: string;
+  avatarUrl: string | null;
+  /** Null: never signed in with Google (gets linked by email on the first Google sign-in). */
+  googleSub: string | null;
   lastLoginAt: string;
   createdAt: string;
 }
@@ -21,10 +19,10 @@ export interface FixtureMovie {
   id: number;
   title: string;
   originalTitle: string;
-  year: string | null;
+  year: number | null;
   slug: string;
-  category: 'MOVIE' | 'SERIE';
-  genre: string;
+  category: 'movie' | 'series';
+  genres: string[];
   description: string;
   originalDescription: string | null;
   posterPath: string | null;
@@ -34,7 +32,7 @@ export interface FixtureMovie {
   createdAt: string;
 }
 
-export interface FixtureThread {
+export interface FixtureRating {
   id: number;
   userId: number;
   movieId: number;
@@ -48,22 +46,17 @@ export const users: FixtureUser[] = [
     id: 1,
     name: 'Ana Souza',
     email: 'ana@example.com',
-    avatar: 'https://lh3.googleusercontent.com/a/ana=s96-c',
-    theme: 'BLUE',
-    provider: 'google',
-    providerId: '100000000000000000001',
+    avatarUrl: 'https://lh3.googleusercontent.com/a/ana=s96-c',
+    googleSub: '100000000000000000001',
     lastLoginAt: '2026-10-01T12:00:00Z',
     createdAt: '2015-09-11T20:26:44Z',
   },
   {
-    // Facebook-era user (can't log in anymore), still shown on old ratings.
     id: 2,
     name: 'Bruno Lima',
     email: 'bruno@example.com',
-    avatar: 'https://scontent.xx.fbcdn.net/v/t1.0-1/p120x120/bruno.jpg',
-    theme: null,
-    provider: 'facebook',
-    providerId: '200000000000002',
+    avatarUrl: null,
+    googleSub: null,
     lastLoginAt: '2019-02-06T23:11:09Z',
     createdAt: '2016-01-15T19:22:35Z',
   },
@@ -71,10 +64,8 @@ export const users: FixtureUser[] = [
     id: 3,
     name: 'Carla Dias',
     email: 'carla@example.com',
-    avatar: 'https://lh3.googleusercontent.com/a/carla=s96-c',
-    theme: 'GREEN',
-    provider: 'google',
-    providerId: '100000000000000000003',
+    avatarUrl: 'https://lh3.googleusercontent.com/a/carla=s96-c',
+    googleSub: '100000000000000000003',
     lastLoginAt: '2026-09-20T08:30:00Z',
     createdAt: '2018-03-11T11:06:03Z',
   },
@@ -85,10 +76,10 @@ function movie(id: number, fields: Partial<FixtureMovie> & Pick<FixtureMovie, 'o
   return {
     id,
     title: fields.originalTitle,
-    year: '2010',
+    year: 2010,
     slug,
-    category: 'MOVIE',
-    genre: 'Drama',
+    category: 'movie',
+    genres: ['Drama'],
     description: `Descrição de ${fields.originalTitle}.`,
     originalDescription: `Overview of ${fields.originalTitle}.`,
     posterPath: `/poster-${id}.jpg`,
@@ -101,24 +92,23 @@ function movie(id: number, fields: Partial<FixtureMovie> & Pick<FixtureMovie, 'o
 }
 
 const specialMovies: FixtureMovie[] = [
-  // Three ratings: average VERY_GOOD, last UNMISSABLE (not the highest id), list order by id ≠ created_at order.
-  movie(1, { title: 'Matrix', originalTitle: 'The Matrix', year: '1999', genre: 'Action,Science Fiction' }),
-  // Two ratings with mean 2.5: PHP round() gives COOL (half away from zero); banker's rounding would give BAD.
-  movie(2, { title: 'Ação em Dobro', originalTitle: 'Double Action', genre: 'Ação,Comédia' }),
+  // Three ratings: average VERY_GOOD, last UNMISSABLE (not the highest id).
+  movie(1, { title: 'Matrix', originalTitle: 'The Matrix', year: 1999, genres: ['Action', 'Science Fiction'] }),
+  // Two ratings with mean score 2.5: the average rounds up to COOL.
+  movie(2, { title: 'Ação em Dobro', originalTitle: 'Double Action', genres: ['Ação', 'Comédia'] }),
   // A series.
-  movie(3, { originalTitle: 'Snowpiercer', category: 'SERIE', year: '2020', genre: 'Drama,Sci-Fi & Fantasy' }),
+  movie(3, { originalTitle: 'Snowpiercer', category: 'series', year: 2020, genres: ['Drama', 'Sci-Fi & Fantasy'] }),
   // No poster and no backdrop: null image URLs, never picked by /movies/random.
   movie(4, { originalTitle: 'No Images', posterPath: null, backdropPath: null }),
   // Only bad ratings: never picked by /movies/random.
   movie(5, { originalTitle: 'Stay Away From Me' }),
-  // No year, no IMDb id.
-  movie(6, { originalTitle: 'Unknown Year', year: null, imdbId: null }),
+  // No year, no IMDb id, no genres.
+  movie(6, { originalTitle: 'Unknown Year', year: null, imdbId: null, genres: [] }),
 ];
 
 const FILLER_IDS = Array.from({ length: 24 }, (_, i) => i + 7);
 
-// 30 movies with ratings → page 1 has 24, page 2 has 6.
-// Movie 31 has no ratings: it's not in the list, and its details hit Q-17.
+// 30 rated movies → the first page has 24, the second 6. Movie 31 has no ratings: not listed, empty rating block.
 export const movies: FixtureMovie[] = [
   ...specialMovies,
   ...FILLER_IDS.map(id => movie(id, { originalTitle: `Filler Movie ${id}` })),
@@ -127,17 +117,25 @@ export const movies: FixtureMovie[] = [
 
 const FILLER_RATINGS: RatingKey[] = ['GOOD', 'VERY_GOOD', 'UNMISSABLE', 'COOL'];
 
-// Ratings of the filler movies are older than the special ones, one day apart, so the list order is
-// specials (by their latest rating) first, then fillers from the newest (id 30) to the oldest (id 7).
-const fillerThreads: Omit<FixtureThread, 'id'>[] = FILLER_IDS.map((movieId, i) => ({
+/**
+ * Filler ratings are older than the special ones, one day apart, so the list is the specials (by their latest rating),
+ * then fillers 30 → 7. Fillers 12 and 13 are rated at the same second, right across the page boundary
+ * (13 is the 24th item, 12 the 25th): the cursor must neither repeat nor skip one of them.
+ */
+function fillerRatedAt(movieId: number): string {
+  const day = movieId === 13 ? 12 - 7 : movieId - 7;
+  return new Date(Date.UTC(2020, 0, 1 + day, 12)).toISOString().replace('.000Z', 'Z');
+}
+
+const fillerRatings: Omit<FixtureRating, 'id'>[] = FILLER_IDS.map((movieId, i) => ({
   userId: (i % users.length) + 1,
   movieId,
   rating: FILLER_RATINGS[i % FILLER_RATINGS.length] ?? 'GOOD',
   comment: null,
-  createdAt: new Date(Date.UTC(2020, 0, 1 + i, 12)).toISOString().replace('.000Z', 'Z'),
+  createdAt: fillerRatedAt(movieId),
 }));
 
-const specialThreads: Omit<FixtureThread, 'id'>[] = [
+const specialRatings: Omit<FixtureRating, 'id'>[] = [
   { userId: 2, movieId: 1, rating: 'GOOD', comment: 'Clássico.', createdAt: '2026-08-01T10:00:00Z' },
   { userId: 1, movieId: 1, rating: 'UNMISSABLE', comment: 'Imperdível!', createdAt: '2026-09-15T21:30:00Z' },
   { userId: 3, movieId: 1, rating: 'VERY_GOOD', comment: null, createdAt: '2026-08-20T18:45:00Z' },
@@ -150,4 +148,4 @@ const specialThreads: Omit<FixtureThread, 'id'>[] = [
   { userId: 1, movieId: 6, rating: 'COOL', comment: null, createdAt: '2026-03-03T03:03:03Z' },
 ];
 
-export const threads: FixtureThread[] = [...specialThreads, ...fillerThreads].map((t, i) => ({ id: i + 1, ...t }));
+export const ratings: FixtureRating[] = [...specialRatings, ...fillerRatings].map((r, i) => ({ id: i + 1, ...r }));

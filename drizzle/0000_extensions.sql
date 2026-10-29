@@ -1,2 +1,2 @@
--- users.email is case-insensitive (legacy MariaDB compared emails with a case-insensitive collation).
+-- Case-insensitive emails (users.email).
 CREATE EXTENSION IF NOT EXISTS citext;

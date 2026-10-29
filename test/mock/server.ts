@@ -1,16 +1,13 @@
-// Mock for the external APIs the legacy app calls. Docker network aliases point api.themoviedb.org,
-// api.telegram.org and www.googleapis.com here; HTTPS uses the throwaway CA from certs.sh.
+// Stand-in for the external APIs the app calls (TMDb, Telegram), for the API tests and local development.
+// Each API answers under a prefix named after its host, e.g. http://127.0.0.1:8080/api.themoviedb.org/3/movie/603,
+// so the app only needs its base URLs pointed here.
 //
-// Outside Docker (the new app on the host or in CI), the same APIs answer on the control port under a prefix named
-// after the host: http://127.0.0.1:8080/www.googleapis.com/oauth2/v3/userinfo. Without /certs (no Docker), only the
-// control port listens.
-//
-// Control API (port 8080, published on the host):
-//   GET  /__requests        every request received since the last reset
-//   POST /__reset           clears recorded requests and runtime stubs
-//   POST /__google/tokens   {token, user: {sub, name, email, picture}} → userinfo for that access token
-//   POST /__tmdb            {path, query?, status?, body} → response for a TMDb path, e.g. "/3/movie/603"
-// Anything not stubbed answers like the real API would for an unknown resource or token.
+// Control API:
+//   GET  /__requests   every request received since the last reset
+//   POST /__reset      clears recorded requests and stubs
+//   POST /__tmdb       {path, query?, status?, body} → response for a TMDb path, e.g. "/3/movie/603"
+// Anything not stubbed answers like the real API would for an unknown resource.
+//   bun test/mock/server.ts   (port: MOCK_PORT, default 8080)
 
 interface Recorded {
   at: string;
@@ -36,7 +33,6 @@ const TMDB_NOT_FOUND = {
 };
 
 let requests: Recorded[] = [];
-let googleTokens = new Map<string, unknown>();
 let tmdbStubs: TmdbStub[] = [];
 let telegramMessageId = 0;
 
@@ -72,14 +68,6 @@ async function record(req: Request): Promise<Recorded> {
   return entry;
 }
 
-function google(r: Recorded): Response {
-  if (r.path !== '/oauth2/v3/userinfo') return json({ error: 'not_found' }, 404);
-  const token = (r.headers['authorization'] ?? '').replace(/^Bearer /, '');
-  const user = googleTokens.get(token);
-  if (!user) return json({ error: 'invalid_request', error_description: 'Invalid Credentials' }, 401);
-  return json(user);
-}
-
 function tmdb(r: Recorded): Response {
   const matches = (stub: TmdbStub) =>
     stub.path === r.path && Object.entries(stub.query).every(([key, value]) => r.query[key] === value);
@@ -96,7 +84,6 @@ function telegram(r: Recorded): Response {
 }
 
 const externalHandlers: Record<string, (r: Recorded) => Response> = {
-  'www.googleapis.com': google,
   'api.themoviedb.org': tmdb,
   'api.telegram.org': telegram,
 };
@@ -107,7 +94,7 @@ async function external(req: Request): Promise<Response> {
   return handler ? handler(r) : json({ error: `unexpected host ${r.host}` }, 502);
 }
 
-/** `/<host>/<path>` on the control port, recorded as if `<host>` had been called directly. */
+/** `/<host>/<path>`, recorded as if `<host>` had been called directly. */
 function prefixed(req: Request): Request | undefined {
   const url = new URL(req.url);
   const [, host, ...rest] = url.pathname.split('/');
@@ -130,14 +117,8 @@ async function control(req: Request): Promise<Response> {
       return json(requests);
     case 'POST /__reset':
       requests = [];
-      googleTokens = new Map();
       tmdbStubs = [];
       return json({ ok: true });
-    case 'POST /__google/tokens': {
-      const { token, user } = (await req.json()) as { token: string; user: unknown };
-      googleTokens.set(token, user);
-      return json({ ok: true });
-    }
     case 'POST /__tmdb': {
       const { path, query = {}, status = 200, body } = (await req.json()) as Partial<TmdbStub> & { path: string };
       tmdbStubs.push({ path, query, status, body });
@@ -148,12 +129,6 @@ async function control(req: Request): Promise<Response> {
   }
 }
 
-Bun.serve({ port: 8080, fetch: control });
-if (await Bun.file('/certs/mock.pem').exists()) {
-  Bun.serve({ port: 80, fetch: external });
-  const tls = { cert: Bun.file('/certs/mock.pem'), key: Bun.file('/certs/mock.key') };
-  Bun.serve({ port: 443, fetch: external, tls });
-  console.log('mock listening on :80, :443 (TLS) and :8080 (control + prefixed APIs)');
-} else {
-  console.log('mock listening on :8080 (control + prefixed APIs)');
-}
+const port = Number(process.env['MOCK_PORT'] ?? 8080);
+Bun.serve({ port, fetch: control });
+console.log(`mock listening on :${port}`);

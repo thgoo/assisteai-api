@@ -1,6 +1,6 @@
 {
-  "id": "61c45884-fbe9-4105-9a9e-35a509b54501",
-  "prevId": "912cf8e9-1f87-4169-8f1d-29b2b855a8c7",
+  "id": "dd27d972-c98c-4877-8304-92f634a7eb8b",
+  "prevId": "1672da8c-f8b6-4b55-aee0-e648927ddee5",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -102,7 +102,7 @@
         },
         "external_ids_category_check": {
           "name": "external_ids_category_check",
-          "value": "\n    (\"external_ids\".\"source\" = 'tmdb' AND \"external_ids\".\"category\" IS NOT NULL AND \"external_ids\".\"category\" IN ('MOVIE', 'SERIE'))\n    OR (\"external_ids\".\"source\" = 'imdb' AND \"external_ids\".\"category\" IS NULL)\n  "
+          "value": "\n    (\"external_ids\".\"source\" = 'tmdb' AND \"external_ids\".\"category\" IS NOT NULL AND \"external_ids\".\"category\" IN ('movie', 'series'))\n    OR (\"external_ids\".\"source\" = 'imdb' AND \"external_ids\".\"category\" IS NULL)\n  "
         }
       },
       "isRLSEnabled": false
@@ -142,7 +142,7 @@
         },
         "year": {
           "name": "year",
-          "type": "text",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
@@ -158,11 +158,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "genre": {
-          "name": "genre",
-          "type": "text",
+        "genres": {
+          "name": "genres",
+          "type": "text[]",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'{}'"
         },
         "description": {
           "name": "description",
@@ -190,14 +191,14 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
@@ -211,38 +212,13 @@
       "checkConstraints": {
         "movies_category_check": {
           "name": "movies_category_check",
-          "value": "\"movies\".\"category\" IN ('MOVIE', 'SERIE')"
+          "value": "\"movies\".\"category\" IN ('movie', 'series')"
         }
       },
       "isRLSEnabled": false
     },
-    "public.revoked_tokens": {
-      "name": "revoked_tokens",
-      "schema": "",
-      "columns": {
-        "jti": {
-          "name": "jti",
-          "type": "text",
-          "primaryKey": true,
-          "notNull": true
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.threads": {
-      "name": "threads",
+    "public.ratings": {
+      "name": "ratings",
       "schema": "",
       "columns": {
         "id": {
@@ -252,7 +228,7 @@
           "notNull": true,
           "identity": {
             "type": "byDefault",
-            "name": "threads_id_seq",
+            "name": "ratings_id_seq",
             "schema": "public",
             "increment": "1",
             "startWith": "1",
@@ -288,22 +264,22 @@
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
       "indexes": {
-        "threads_movie_id_created_at_idx": {
-          "name": "threads_movie_id_created_at_idx",
+        "ratings_movie_id_created_at_idx": {
+          "name": "ratings_movie_id_created_at_idx",
           "columns": [
             {
               "expression": "movie_id",
@@ -323,8 +299,8 @@
           "method": "btree",
           "with": {}
         },
-        "threads_user_id_idx": {
-          "name": "threads_user_id_idx",
+        "ratings_user_id_idx": {
+          "name": "ratings_user_id_idx",
           "columns": [
             {
               "expression": "user_id",
@@ -340,9 +316,9 @@
         }
       },
       "foreignKeys": {
-        "threads_user_id_users_id_fk": {
-          "name": "threads_user_id_users_id_fk",
-          "tableFrom": "threads",
+        "ratings_user_id_users_id_fk": {
+          "name": "ratings_user_id_users_id_fk",
+          "tableFrom": "ratings",
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
@@ -353,9 +329,9 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
-        "threads_movie_id_movies_id_fk": {
-          "name": "threads_movie_id_movies_id_fk",
-          "tableFrom": "threads",
+        "ratings_movie_id_movies_id_fk": {
+          "name": "ratings_movie_id_movies_id_fk",
+          "tableFrom": "ratings",
           "tableTo": "movies",
           "columnsFrom": [
             "movie_id"
@@ -369,8 +345,8 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "threads_user_id_movie_id_unique": {
-          "name": "threads_user_id_movie_id_unique",
+        "ratings_user_id_movie_id_unique": {
+          "name": "ratings_user_id_movie_id_unique",
           "nullsNotDistinct": false,
           "columns": [
             "user_id",
@@ -380,11 +356,86 @@
       },
       "policies": {},
       "checkConstraints": {
-        "threads_rating_check": {
-          "name": "threads_rating_check",
-          "value": "\"threads\".\"rating\" IN ('STAY_AWAY', 'VERY_BAD', 'BAD', 'COOL', 'GOOD', 'VERY_GOOD', 'UNMISSABLE')"
+        "ratings_rating_check": {
+          "name": "ratings_rating_check",
+          "value": "\"ratings\".\"rating\" IN ('STAY_AWAY', 'VERY_BAD', 'BAD', 'COOL', 'GOOD', 'VERY_GOOD', 'UNMISSABLE')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.sessions": {
+      "name": "sessions",
+      "schema": "",
+      "columns": {
+        "token_hash": {
+          "name": "token_hash",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (0) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "last_used_at": {
+          "name": "last_used_at",
+          "type": "timestamp (0) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp (0) with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "sessions_user_id_idx": {
+          "name": "sessions_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sessions_user_id_users_id_fk": {
+          "name": "sessions_user_id_users_id_fk",
+          "tableFrom": "sessions",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.users": {
@@ -426,8 +477,8 @@
           "primaryKey": false,
           "notNull": false
         },
-        "avatar": {
-          "name": "avatar",
+        "avatar_url": {
+          "name": "avatar_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -440,20 +491,20 @@
         },
         "last_login_at": {
           "name": "last_login_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": false
         },
         "created_at": {
           "name": "created_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updated_at": {
           "name": "updated_at",
-          "type": "timestamp with time zone",
+          "type": "timestamp (0) with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"

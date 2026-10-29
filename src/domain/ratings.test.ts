@@ -1,27 +1,19 @@
 import { describe, expect, test } from 'bun:test';
-import type { RatingLabel } from './ratings';
-import { averageRatingLabel, RATING_KEYS, ratingLabel } from './ratings';
+import type { RatingKey } from './ratings';
+import { averageRating } from './ratings';
 
-describe('ratingLabel', () => {
-  test('maps every key to its pt-BR label', () => {
-    expect(RATING_KEYS.map(ratingLabel)).toEqual([
-      'Fique Longe', 'Muito Ruim', 'Ruinzinho', 'Legal', 'Bom', 'Muito Bom', 'Imperdível',
-    ]);
-  });
-});
-
-describe('averageRatingLabel', () => {
-  test.each<[number, RatingLabel]>([
-    [0, 'Fique Longe'],
-    [2.49, 'Ruinzinho'],
-    [2.5, 'Legal'],
-    [5.5, 'Imperdível'],
-    [6, 'Imperdível'],
-  ])('%d → %s (half away from zero, like PHP round())', (score, label) => {
-    expect(averageRatingLabel(score)).toBe(label);
+describe('averageRating', () => {
+  test.each<[number, RatingKey]>([
+    [0, 'STAY_AWAY'],
+    [2.49, 'BAD'],
+    [2.5, 'COOL'],
+    [5.5, 'UNMISSABLE'],
+    [6, 'UNMISSABLE'],
+  ])('%d → %s', (score, key) => {
+    expect(averageRating(score)).toBe(key);
   });
 
   test('rejects scores outside 0–6', () => {
-    expect(() => averageRatingLabel(7)).toThrow(RangeError);
+    expect(() => averageRating(7)).toThrow(RangeError);
   });
 });

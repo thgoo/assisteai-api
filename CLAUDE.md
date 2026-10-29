@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-Bun + Hono rewrite of the legacy AssisteAí API. The plan, the decisions and the step checklist live in
-`../assisteai-back/docs/rewrite/`. Read its `README.md` first and follow its "How we work" section.
+API of AssisteAí (Bun + Hono + PostgreSQL). The API design (doc 05), the frontend changes it implies (doc 06) and the
+step checklist (doc 04) live in `../assisteai-back/docs/rewrite/`. Follow the "How we work" section of its `README.md`.
 Code conventions: doc 02, "Code conventions".
 
-- The contract suite (`test/contract/`) is black-box: it never imports from `src/`. It must stay green against the
-  legacy env (`bun run legacy:up`) with `TARGET=legacy`, and against the new app with `TARGET=new`.
-- `test/fixtures/dataset.ts` is the single source of test data for both databases.
-- `bun run check` (typecheck + lint) must pass before calling a step done.
+- This codebase is self-contained: no compatibility layers or references to previous systems. Design from doc 05.
+- The API tests (`test/api/`) are black-box: they never import from `src/`.
+- `test/fixtures/dataset.ts` is the single source of test data (seed and test expectations).
+- `bun run check`, `bun run test` and `bun run test:api` must pass before calling a step done; then commit and push.

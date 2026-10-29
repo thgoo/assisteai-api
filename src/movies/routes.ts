@@ -1,36 +1,39 @@
-import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { MovieService } from './movie-service';
-import { ApiError } from '~/http/errors';
-import { lengthAwarePage, offsetOf, pageParam } from '~/http/pagination';
-import { movieDetail, movieListItem } from './serializers';
+import { cursorParam, encodeCursor } from '~/http/cursor';
+import { ProblemError } from '~/http/errors';
+import { validate } from '~/http/validation';
+import { movieDetail, movieSummary } from './serializers';
 
-/** Fixed: v1 doesn't accept `per_page` (Q-11). */
-const PER_PAGE = 24;
+const PAGE_SIZE = 24;
 
-/** Legacy answered 200 with this body (Q-03); the frontend can't render the page either way. */
-const NOT_FOUND = 'Erro catastrófico.';
+const listPosition = z.object({
+  lastRatedAt: z.iso.datetime().transform(value => new Date(value)),
+  id: z.number().int(),
+});
 
 export function createMovieRoutes({ movieService }: { movieService: MovieService }) {
   return new Hono()
-    .get('/', zValidator('query', z.object({ page: pageParam(PER_PAGE) })), async c => {
-      const pageRequest = { page: c.req.valid('query').page, perPage: PER_PAGE };
-      const { items, total } = await movieService.listRated({ limit: PER_PAGE, offset: offsetOf(pageRequest) });
+    .get('/', validate('query', z.object({ cursor: cursorParam(listPosition).optional() })), async c => {
+      const { items, next } = await movieService.listRated({ after: c.req.valid('query').cursor, limit: PAGE_SIZE });
 
-      return c.json(lengthAwarePage({ items: items.map(movieListItem), total }, pageRequest, c.req.url));
+      return c.json({
+        data: items.map(movieSummary),
+        nextCursor: next && encodeCursor({ lastRatedAt: next.lastRatedAt.toISOString(), id: next.id }),
+      });
     })
     .get('/random', async c => {
       const movie = await movieService.findRandomRecommended();
-      if (!movie) throw new ApiError(404, NOT_FOUND);
+      if (!movie) throw new ProblemError(404, 'Nenhum filme para sugerir ainda.');
 
-      return c.json({ success: true, data: movieDetail(movie, { withUsers: false }) });
+      return c.json(movieDetail(movie));
     })
-    // Digits only: anything else falls through to the generic 404 (legacy crashed with a 500).
+    // Digits only (15 at most, so the id is a safe integer): anything else is the generic 404.
     .get('/:id{[0-9]{1,15}}', async c => {
       const movie = await movieService.findDetail(Number(c.req.param('id')));
-      if (!movie) throw new ApiError(404, NOT_FOUND);
+      if (!movie) throw new ProblemError(404, 'Filme não encontrado.');
 
-      return c.json({ success: true, data: movieDetail(movie, { withUsers: true }) });
+      return c.json(movieDetail(movie));
     });
 }

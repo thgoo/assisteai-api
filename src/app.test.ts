@@ -3,49 +3,41 @@ import { HTTPException } from 'hono/http-exception';
 import type { Logger } from '~/logger';
 import { unusedServices } from '~/test-support/unused-services';
 import { createApp } from './app';
-import { ApiError, statusMessage } from './http/errors';
+import { ProblemError } from './http/errors';
 
 function appThatThrows(error: Error) {
   const logError = mock();
   const logger: Logger = { debug: mock(), info: mock(), warn: mock(), error: logError, child: () => logger };
-  const app = createApp({
-    logger,
-    corsOrigins: ['https://assisteai.com.br'],
-    ...unusedServices,
-  });
+  const app = createApp({ logger, corsOrigins: ['https://assisteai.com.br'], ...unusedServices });
   app.get('/throws', () => {
     throw error;
   });
   return { app, logError };
 }
 
-describe('statusMessage', () => {
-  test.each([
-    [401, 'HTTP_UNAUTHORIZED'],
-    [404, 'HTTP_NOT_FOUND'],
-    [405, 'HTTP_METHOD_NOT_ALLOWED'],
-    [422, 'HTTP_UNPROCESSABLE_ENTITY'],
-    [500, 'HTTP_INTERNAL_SERVER_ERROR'],
-  ])('%i → %s', (status, message) => {
-    expect(statusMessage(status)).toBe(message);
-  });
-});
+async function problemOf(response: Response) {
+  expect(response.headers.get('Content-Type')).toBe('application/problem+json');
+  return response.json();
+}
 
 describe('error handling', () => {
-  test('ApiError: its status and the user-facing message', async () => {
-    const { app } = appThatThrows(new ApiError(409, 'Você já avaliou esse filme.'));
+  test('ProblemError: its status, detail and field errors', async () => {
+    const errors = [{ path: 'url', message: 'Informe o link.' }];
+    const { app } = appThatThrows(new ProblemError(422, 'Informe o link.', errors));
     const response = await app.request('/throws');
 
-    expect(response.status).toBe(409);
-    expect(await response.json()).toEqual({ success: false, message: 'Você já avaliou esse filme.' });
+    expect(response.status).toBe(422);
+    expect(await problemOf(response)).toEqual({
+      type: 'about:blank', title: 'Unprocessable Entity', status: 422, detail: 'Informe o link.', errors,
+    });
   });
 
-  test('HTTPException: the legacy status body', async () => {
+  test('HTTPException: a problem with the standard title', async () => {
     const { app } = appThatThrows(new HTTPException(401));
     const response = await app.request('/throws');
 
     expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ success: false, status: 401, message: 'HTTP_UNAUTHORIZED' });
+    expect(await problemOf(response)).toEqual({ type: 'about:blank', title: 'Unauthorized', status: 401 });
   });
 
   test('anything else: a logged 500 that leaks nothing', async () => {
@@ -54,14 +46,23 @@ describe('error handling', () => {
     const response = await app.request('/throws');
 
     expect(response.status).toBe(500);
-    expect(await response.json()).toEqual({ success: false, status: 500, message: 'HTTP_INTERNAL_SERVER_ERROR' });
+    expect(await problemOf(response)).toEqual({ type: 'about:blank', title: 'Internal Server Error', status: 500 });
     expect(logError).toHaveBeenCalledWith('Unhandled error', { method: 'GET', path: '/throws', error });
   });
 
-  test('error responses keep the CORS headers', async () => {
+  test('unknown routes: 404 problem', async () => {
+    const { app } = appThatThrows(new Error('unused'));
+    const response = await app.request('/nope');
+
+    expect(response.status).toBe(404);
+    expect(await problemOf(response)).toEqual({ type: 'about:blank', title: 'Not Found', status: 404 });
+  });
+
+  test('error responses keep the CORS headers, with credentials', async () => {
     const { app } = appThatThrows(new Error('boom'));
     const response = await app.request('/throws', { headers: { Origin: 'https://assisteai.com.br' } });
 
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://assisteai.com.br');
+    expect(response.headers.get('Access-Control-Allow-Credentials')).toBe('true');
   });
 });

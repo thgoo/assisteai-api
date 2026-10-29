@@ -2,26 +2,22 @@ import { describe, expect, test } from 'bun:test';
 import type { MovieService } from './movie-service';
 import { createApp } from '~/app';
 import { ConsoleLogger } from '~/logger';
-import { unusedServices } from '~/test-support/unused-services';
 
 function appWith(movieService: Partial<MovieService>) {
   return createApp({
     logger: new ConsoleLogger({ level: 'error', format: 'json' }),
     corsOrigins: ['https://assisteai.com.br'],
-    ...unusedServices,
     movieService: movieService as MovieService,
   });
 }
 
-const NOT_FOUND_BODY = { success: false, message: 'Erro catastrófico.' };
-
 describe('movie routes', () => {
-  test('GET /movies/random without an eligible movie: 404 with the legacy body (Q-03)', async () => {
+  test('GET /movies/random without an eligible movie: 404 problem', async () => {
     const app = appWith({ findRandomRecommended: () => Promise.resolve(undefined) });
     const response = await app.request('/movies/random');
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual(NOT_FOUND_BODY);
+    expect(await response.json()).toMatchObject({ status: 404, detail: 'Nenhum filme para sugerir ainda.' });
   });
 
   test('GET /movies/{id} looks the id up as a number', async () => {
@@ -41,6 +37,13 @@ describe('movie routes', () => {
     const response = await appWith({}).request('/movies/1234567890123456');
 
     expect(response.status).toBe(404);
-    expect(await response.json()).toEqual({ success: false, status: 404, message: 'HTTP_NOT_FOUND' });
+    expect(await response.json()).toEqual({ type: 'about:blank', title: 'Not Found', status: 404 });
+  });
+
+  test('GET /movies with an invalid cursor: 422', async () => {
+    const response = await appWith({}).request('/movies?cursor=garbage');
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({ detail: 'Cursor inválido.', errors: [{ path: 'cursor' }] });
   });
 });

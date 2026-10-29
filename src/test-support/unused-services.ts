@@ -7,4 +7,4 @@ export const unusedServices = new Proxy({}, {
       throw new Error(`Unexpected call: ${String(name)}.${String(method)}()`);
     },
   }),
-}) as Pick<AppDependencies, 'googleClient' | 'movieService' | 'tokenService' | 'userRepository'>;
+}) as Pick<AppDependencies, 'movieService'>;

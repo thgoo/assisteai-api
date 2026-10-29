@@ -3,8 +3,7 @@ import { loadConfig, loadDatabaseConfig } from './config';
 
 const CORS_ORIGINS = 'https://assisteai.com.br, https://beta2.assisteai.com.br';
 const DATABASE_URL = 'postgres://assisteai:assisteai@127.0.0.1:55432/assisteai';
-const JWT_SECRET = 'local-legacy-env-jwt-secret-must-be-at-least-256-bits-long-0123456789';
-const REQUIRED = { CORS_ORIGINS, DATABASE_URL, JWT_SECRET };
+const REQUIRED = { CORS_ORIGINS, DATABASE_URL };
 
 describe('loadConfig', () => {
   test('development defaults: port 3000, pretty debug logs', () => {
@@ -14,8 +13,6 @@ describe('loadConfig', () => {
       log: { level: 'debug', format: 'pretty' },
       corsOrigins: ['https://assisteai.com.br', 'https://beta2.assisteai.com.br'],
       database: { url: DATABASE_URL },
-      jwtSecret: JWT_SECRET,
-      googleApiUrl: 'https://www.googleapis.com',
     });
   });
 
@@ -46,10 +43,6 @@ describe('loadConfig', () => {
   test('DATABASE_URL must be a Postgres URL', () => {
     const mysql = () => loadConfig({ ...REQUIRED, DATABASE_URL: 'mysql://root@localhost/assisteai' });
     expect(mysql).toThrow(/DATABASE_URL/);
-  });
-
-  test('JWT_SECRET must be at least 256 bits, like legacy requires', () => {
-    expect(() => loadConfig({ ...REQUIRED, JWT_SECRET: 'short' })).toThrow(/256 bits/);
   });
 
   test('loadDatabaseConfig needs only DATABASE_URL', () => {

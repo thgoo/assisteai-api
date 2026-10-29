@@ -1,4 +1,4 @@
 export { externalIds, movies } from './movies';
-export { revokedTokens } from './revoked-tokens';
-export { threads } from './threads';
+export { ratings } from './ratings';
+export { sessions } from './sessions';
 export { users } from './users';

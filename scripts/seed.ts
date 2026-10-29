@@ -1,11 +1,11 @@
-// Replaces the database contents with the contract dataset (test/fixtures/dataset.ts), mapped the way the ETL maps
-// production data (doc 03 §3). Also the contract suite's RESET_DB_COMMAND for TARGET=new.
+// Replaces the database contents with the test dataset (test/fixtures/dataset.ts). Also the API tests' database
+// reset (RESET_DB_COMMAND).
 //   bun run db:seed
 import { getTableName, sql } from 'drizzle-orm';
 import { loadDatabaseConfig } from '~/config';
 import { createDatabase } from '~/db/client';
-import { externalIds, movies, revokedTokens, threads, users } from '~/db/schema';
-import { movies as fixtureMovies, threads as fixtureThreads, users as fixtureUsers } from '../test/fixtures/dataset';
+import { externalIds, movies, ratings, sessions, users } from '~/db/schema';
+import { movies as fixtureMovies, ratings as fixtureRatings, users as fixtureUsers } from '../test/fixtures/dataset';
 
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '[::1]', 'postgres']);
 
@@ -16,7 +16,7 @@ if (!LOCAL_HOSTS.has(hostname)) {
 }
 
 const { db, close } = createDatabase(url);
-const tables = [users, movies, externalIds, threads, revokedTokens];
+const tables = [users, movies, externalIds, ratings, sessions];
 
 try {
   await db.transaction(async tx => {
@@ -26,9 +26,8 @@ try {
       id: user.id,
       name: user.name,
       email: user.email,
-      googleSub: user.provider === 'google' ? user.providerId : null,
-      avatar: user.avatar,
-      theme: user.theme,
+      googleSub: user.googleSub,
+      avatarUrl: user.avatarUrl,
       lastLoginAt: new Date(user.lastLoginAt),
       createdAt: new Date(user.createdAt),
       updatedAt: new Date(user.lastLoginAt),
@@ -41,7 +40,7 @@ try {
       year: movie.year,
       slug: movie.slug,
       category: movie.category,
-      genre: movie.genre,
+      genres: movie.genres,
       description: movie.description,
       originalDescription: movie.originalDescription,
       posterPath: movie.posterPath,
@@ -55,25 +54,25 @@ try {
       ...(movie.imdbId === null ? [] : [{ movieId: movie.id, source: 'imdb' as const, externalId: movie.imdbId }]),
     ]));
 
-    await tx.insert(threads).values(fixtureThreads.map(thread => ({
-      id: thread.id,
-      userId: thread.userId,
-      movieId: thread.movieId,
-      rating: thread.rating,
-      comment: thread.comment === '' ? null : thread.comment,
-      createdAt: new Date(thread.createdAt),
-      updatedAt: new Date(thread.createdAt),
+    await tx.insert(ratings).values(fixtureRatings.map(rating => ({
+      id: rating.id,
+      userId: rating.userId,
+      movieId: rating.movieId,
+      rating: rating.rating,
+      comment: rating.comment,
+      createdAt: new Date(rating.createdAt),
+      updatedAt: new Date(rating.createdAt),
     })));
 
     // Explicit ids don't advance the identity sequences: move them past the seeded rows.
-    for (const table of [users, movies, threads]) {
+    for (const table of [users, movies, ratings]) {
       await tx.execute(sql`
         SELECT setval(pg_get_serial_sequence(${getTableName(table)}, 'id'), max(id)) FROM ${table}
       `);
     }
   });
 
-  console.log(`Seeded ${fixtureUsers.length} users, ${fixtureMovies.length} movies, ${fixtureThreads.length} threads`);
+  console.log(`Seeded ${fixtureUsers.length} users, ${fixtureMovies.length} movies, ${fixtureRatings.length} ratings`);
 } finally {
   await close();
 }

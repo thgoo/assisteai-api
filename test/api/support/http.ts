@@ -1,4 +1,4 @@
-import { baseUrl } from './target';
+import { baseUrl } from './env';
 
 export interface ApiResponse {
   status: number;

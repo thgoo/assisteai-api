@@ -14,9 +14,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "bun scripts/seed.ts",
-    "test:contract": "bun test test/contract",
-    "legacy:up": "docker compose -f test/legacy-env/compose.yaml up -d --build --wait",
-    "legacy:down": "docker compose -f test/legacy-env/compose.yaml down -v"
+    "test:api": "bun test test/api",
+    "mock": "bun test/mock/server.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

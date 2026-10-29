@@ -1,13 +1,6 @@
-// Client for the external API mock's control port (test/legacy-env/mock/server.ts).
+// Client for the external API mock's control port (test/mock/server.ts).
 import { z } from 'zod';
-import { mockUrl } from './target';
-
-export interface GoogleUser {
-  sub: string;
-  name: string;
-  email: string;
-  picture: string;
-}
+import { mockUrl } from './env';
 
 const recordedSchema = z.array(z.object({
   method: z.string(),
@@ -36,11 +29,6 @@ async function control(method: string, path: string, body?: unknown): Promise<un
 
 export async function resetMock(): Promise<void> {
   await control('POST', '/__reset');
-}
-
-/** Makes Google's userinfo endpoint answer `user` for this access token. */
-export async function registerGoogleToken(token: string, user: GoogleUser): Promise<void> {
-  await control('POST', '/__google/tokens', { token, user: { ...user, email_verified: true } });
 }
 
 /** Makes TMDb answer `body` for this path (and these query parameters, if given). */

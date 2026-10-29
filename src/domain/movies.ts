@@ -1,5 +1,4 @@
-/** `SERIE` (sic) is what the legacy API and the frontend use. */
-export const MOVIE_CATEGORIES = ['MOVIE', 'SERIE'] as const;
+export const MOVIE_CATEGORIES = ['movie', 'series'] as const;
 
 export type MovieCategory = (typeof MOVIE_CATEGORIES)[number];
 

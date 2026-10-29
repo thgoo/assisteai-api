@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, index, pgTable, text, unique } from 'drizzle-orm/pg-core';
+import { check, index, integer, pgTable, text, unique } from 'drizzle-orm/pg-core';
 import { EXTERNAL_ID_SOURCES, MOVIE_CATEGORIES } from '~/domain/movies';
 import { foreignId, id, oneOf, timestamps } from './columns';
 
@@ -7,10 +7,10 @@ export const movies = pgTable('movies', {
   id: id(),
   title: text('title').notNull(),
   originalTitle: text('original_title').notNull(),
-  year: text('year'),
+  year: integer('year'),
   slug: text('slug').notNull(),
   category: text('category', { enum: MOVIE_CATEGORIES }).notNull(),
-  genre: text('genre').notNull(),
+  genres: text('genres').array().notNull().default(sql`'{}'`),
   description: text('description').notNull(),
   originalDescription: text('original_description'),
   posterPath: text('poster_path'),
@@ -21,7 +21,7 @@ export const movies = pgTable('movies', {
 ]);
 
 /**
- * TMDb and IMDb ids of a movie. TMDb ids are only unique per category (a movie and a series can share one, Q-20),
+ * TMDb and IMDb ids of a movie. TMDb ids are only unique per category (a movie and a series can share one),
  * so tmdb rows carry the category and imdb rows don't.
  */
 export const externalIds = pgTable('external_ids', {
