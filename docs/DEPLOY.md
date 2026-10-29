@@ -16,8 +16,8 @@ the API under PM2 with Bun, Postgres in Docker bound to `127.0.0.1`, nginx in fr
 Bun 1.3.14, PM2, Docker and Docker Compose are already on the host (bargah uses them).
 
 ```sh
-cd /var/www
-sudo git clone git@github.com:thgoo/assisteai-api.git && sudo chown -R ec2-user: assisteai-api && cd assisteai-api
+sudo mkdir /var/www/assisteai-api && sudo chown ec2-user: /var/www/assisteai-api
+git clone https://github.com/thgoo/assisteai-api.git /var/www/assisteai-api && cd /var/www/assisteai-api
 bun install --frozen-lockfile
 
 # Postgres
