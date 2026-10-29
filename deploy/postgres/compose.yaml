@@ -1,0 +1,36 @@
+# Production Postgres for the API, on the same host (bargah's Postgres uses 5432, so this one is on 5433).
+#
+#   cd deploy/postgres
+#   cp .env.example .env && sed -i "s/^POSTGRES_PASSWORD=.*/POSTGRES_PASSWORD=$(openssl rand -hex 24)/" .env
+#   docker compose up -d
+#
+# Bound to 127.0.0.1 only: reachable by the API on this host, never from outside.
+# Backups: scripts/pg-backup.sh (docs/DEPLOY.md).
+
+name: assisteai-postgres
+
+services:
+  postgres:
+    image: postgres:18.6-alpine   # same as compose.yaml (development) and CI
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-assisteai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/postgres/.env}
+      POSTGRES_DB: ${POSTGRES_DB:-assisteai}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "3"
+
+volumes:
+  pgdata:

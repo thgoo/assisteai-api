@@ -32,3 +32,9 @@ External APIs (TMDb, Telegram) are served by `test/mock/server.ts` under `/<host
 through its control endpoints (`MOCK_URL`).
 
 CI (`.github/workflows/ci.yml`) runs all of the above against a Postgres service container.
+
+## Production
+
+Same host and setup as bargah: PM2 (`ecosystem.config.cjs`), Postgres in Docker (`deploy/postgres/`), nginx and
+Cloudflare in front. Setup, updates (`scripts/deploy.sh`), backups (`scripts/pg-backup.sh`) and the cutover runbook:
+[`docs/DEPLOY.md`](docs/DEPLOY.md).
