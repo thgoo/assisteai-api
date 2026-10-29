@@ -7,7 +7,7 @@ the API under PM2 with Bun, Postgres in Docker bound to `127.0.0.1`, nginx in fr
 |---|---|
 | Code | `/var/www/assisteai-api` (this repo, `main`). Next to it: the front in `/var/www/assisteai.com.br`, the old API in `/var/www/api.assisteai.com.br` (removed after the cutover) |
 | Process | PM2 `api.assisteai.com.br` (`ecosystem.config.cjs`), logs in `~/.pm2/logs/` |
-| Port | `PORT` in `.env` (pick a free one: `ss -ltnp`; the front uses 3003, bargah 3004/3005), on `127.0.0.1` |
+| Port | `3007` on `127.0.0.1` (taken on the host: 3002–3006 by other sites, 3306 MariaDB, 5432 bargah's Postgres) |
 | Database | `deploy/postgres` (Docker), `127.0.0.1:5433` |
 | Backups | `scripts/pg-backup.sh`, daily cron → `/var/backups/assisteai` |
 
@@ -29,7 +29,7 @@ bun install --frozen-lockfile
 
 ```sh
 NODE_ENV=production
-PORT=3006                      # whatever is free
+PORT=3007
 CORS_ORIGINS=https://assisteai.com.br,https://www.assisteai.com.br,https://beta2.assisteai.com.br
 DATABASE_URL=postgres://assisteai:<POSTGRES_PASSWORD from deploy/postgres/.env>@127.0.0.1:5433/assisteai
 GOOGLE_CLIENT_ID=736877274011-im98og8tkedl1gdtvjrj6u217dpqf9rq.apps.googleusercontent.com
@@ -61,7 +61,7 @@ cutover, use a temporary hostname (e.g. `api-next.assisteai.com.br`, proxied in 
 
 ```nginx
 location / {
-    proxy_pass http://127.0.0.1:3006;
+    proxy_pass http://127.0.0.1:3007;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $remote_addr;   # the client (Cloudflare also sends CF-Connecting-IP)
     proxy_set_header X-Forwarded-Proto $scheme;
