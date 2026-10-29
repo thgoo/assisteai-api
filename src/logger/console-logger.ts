@@ -66,10 +66,31 @@ function prettyLine(level: LogLevel, message: string, fields: LogContext): strin
   return `${GRAY}${time}${RESET} ${color}[${level.toUpperCase()}] ${message}${RESET}${details}`;
 }
 
+/** How many `cause` levels to follow, so a cycle can't recurse forever. */
+const MAX_CAUSE_DEPTH = 3;
+
+/** Bound query values: user data (emails, names) that stays out of the logs. */
+const REDACTED_ERROR_KEYS = new Set(['params', 'parameters']);
+
 /** `Error`s have no enumerable properties, so `JSON.stringify` would print `{}`. */
 function serializeErrors(fields: LogContext): LogContext {
-  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [
-    key,
-    value instanceof Error ? { name: value.name, message: value.message, stack: value.stack } : value,
-  ]));
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, serializeValue(value, 0)]));
+}
+
+function serializeValue(value: unknown, depth: number): unknown {
+  if (!(value instanceof Error)) return value;
+
+  // Drizzle also appends the values to the message ("Failed query: <sql>\nparams: <values>"), which the stack repeats.
+  const message = 'params' in value ? value.message.split('\nparams: ', 1)[0] ?? '' : value.message;
+  if (depth > MAX_CAUSE_DEPTH) return { name: value.name, message };
+
+  // Own properties carry the details: `code`, `detail` and `severity` from Postgres, `syscall` from the network.
+  const own = Object.entries(value).filter(([key]) => !REDACTED_ERROR_KEYS.has(key) && key !== 'cause');
+  return {
+    name: value.name,
+    message,
+    ...Object.fromEntries(own),
+    stack: value.stack?.replace(value.message, message),
+    ...(value.cause === undefined ? {} : { cause: serializeValue(value.cause, depth + 1) }),
+  };
 }

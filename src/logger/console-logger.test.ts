@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { Mock } from 'bun:test';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { ConsoleLogger } from './console-logger';
 
 describe('ConsoleLogger', () => {
@@ -45,6 +46,28 @@ describe('ConsoleLogger', () => {
 
     expect(log).not.toHaveBeenCalled();
     expect(lastJson(error)['error']).toMatchObject({ name: 'TypeError', message: 'bad' });
+  });
+
+  test('errors keep their own properties and causes, without bound query values', () => {
+    const postgres = Object.assign(new Error('terminating connection'), { code: '57P01', severity: 'FATAL' });
+    const query = new DrizzleQueryError('select 1 where id = $1', ['someone@example.com'], postgres);
+    new ConsoleLogger({ level: 'debug', format: 'json' }).error('Boom', { error: query });
+
+    const logged = lastJson(error)['error'];
+    expect(logged).toMatchObject({
+      message: 'Failed query: select 1 where id = $1',
+      query: 'select 1 where id = $1',
+      cause: { message: 'terminating connection', code: '57P01', severity: 'FATAL' },
+    });
+    expect(JSON.stringify(logged)).not.toContain('someone@example.com');
+  });
+
+  test('cause chains stop at a fixed depth, so cycles terminate', () => {
+    const first = new Error('first');
+    first.cause = new Error('second', { cause: first });
+    new ConsoleLogger({ level: 'debug', format: 'json' }).error('Boom', { error: first });
+
+    expect(lastJson(error)['error']).toMatchObject({ cause: { cause: { cause: { message: 'second' } } } });
   });
 
   test('child loggers add their context to every entry, and calls can override it', () => {
