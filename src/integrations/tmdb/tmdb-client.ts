@@ -22,6 +22,14 @@ export interface TmdbTitle extends TmdbReference {
   backdropPath: string | null;
 }
 
+/** A movie or TV show as TMDb's search lists it, with pt-BR text where TMDb has it. */
+export interface TmdbSearchResult extends TmdbReference {
+  title: string;
+  originalTitle: string;
+  year: number | null;
+  posterPath: string | null;
+}
+
 export interface TmdbClientOptions {
   /** `https://api.themoviedb.org`, or the mock in tests. */
   baseUrl: string;
@@ -52,6 +60,20 @@ const titleSchema = z.object({
 
 type TitleResponse = z.infer<typeof titleSchema>;
 
+const searchSchema = z.object({
+  results: z.array(z.object({
+    media_type: z.string(),
+    id: z.number().int(),
+    title: nonEmpty,
+    name: nonEmpty,
+    original_title: nonEmpty,
+    original_name: nonEmpty,
+    release_date: nonEmpty,
+    first_air_date: nonEmpty,
+    poster_path: nonEmpty,
+  })),
+});
+
 const findSchema = z.object({
   movie_results: z.array(z.object({ id: z.number().int() })),
   tv_results: z.array(z.object({ id: z.number().int() })),
@@ -73,6 +95,27 @@ export class TmdbClient {
     if (movie) return { category: 'movie', tmdbId: String(movie.id) };
     if (tv) return { category: 'tv', tmdbId: String(tv.id) };
     return undefined;
+  }
+
+  /** Movies and TV shows matching the text, in TMDb's relevance order (its first page; people are left out). */
+  async search(query: string): Promise<TmdbSearchResult[]> {
+    const body = await this.get('/3/search/multi', { query, language: 'pt-BR', include_adult: 'false', page: '1' });
+    if (body === undefined) throw new Error('TMDb /3/search/multi answered 404');
+    return searchSchema.parse(body).results.flatMap(result => {
+      if (result.media_type !== 'movie' && result.media_type !== 'tv') return [];
+      const originalTitle = result.original_title ?? result.original_name;
+      const title = result.title ?? result.name ?? originalTitle;
+      if (title === null || originalTitle === null) return [];
+
+      return [{
+        category: result.media_type,
+        tmdbId: String(result.id),
+        title,
+        originalTitle,
+        year: yearOf(result.release_date ?? result.first_air_date),
+        posterPath: result.poster_path,
+      }];
+    });
   }
 
   /** Both languages in parallel, merged. `undefined` when the title doesn't exist. */
@@ -111,17 +154,21 @@ export function mergeTitle(reference: TmdbReference, pt: TitleResponse, en: Titl
     throw new Error(`TMDb ${reference.category} ${reference.tmdbId} has no title`);
   }
 
-  const date = en.release_date ?? en.first_air_date;
   return {
     ...reference,
     imdbId: en.external_ids.imdb_id ?? pt.external_ids.imdb_id,
     title,
     originalTitle,
-    year: date === null ? null : Number(date.slice(0, 4)),
+    year: yearOf(en.release_date ?? en.first_air_date),
     genres: en.genres.map(genre => genre.name),
     description: pt.overview ?? en.overview ?? '',
     originalDescription: en.overview,
     posterPath: en.poster_path,
     backdropPath: en.backdrop_path,
   };
+}
+
+/** The year of a TMDb date (`YYYY-MM-DD`). */
+function yearOf(date: string | null): number | null {
+  return date === null ? null : Number(date.slice(0, 4));
 }

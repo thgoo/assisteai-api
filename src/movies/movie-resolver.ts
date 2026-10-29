@@ -5,10 +5,9 @@ import type { TmdbClient, TmdbTitle } from '~/integrations/tmdb/tmdb-client';
 import type { TitleLink } from '~/ratings/title-link';
 import { externalIds, movies } from '~/db/schema';
 import { slugify } from '~/domain/slug';
+import { toMovieCategory, toTmdbCategory } from '~/integrations/tmdb/tmdb-mapping';
 
 export type Movie = typeof movies.$inferSelect;
-
-const TMDB_CATEGORY = { movie: 'movie', series: 'tv' } as const;
 
 /** Finds the movie a title link points to, or fetches it from TMDb so it can be added. */
 export class MovieResolver {
@@ -23,7 +22,7 @@ export class MovieResolver {
   /** A movie already stored under either of the title's ids (e.g. added from its IMDb link, now linked by TMDb). */
   async findByTitle(title: TmdbTitle): Promise<Movie | undefined> {
     return this.findBy([
-      { source: 'tmdb', category: categoryOf(title), externalId: title.tmdbId },
+      { source: 'tmdb', category: toMovieCategory(title.category), externalId: title.tmdbId },
       ...(title.imdbId === null ? [] : [{ source: 'imdb' as const, externalId: title.imdbId }]),
     ]);
   }
@@ -32,13 +31,13 @@ export class MovieResolver {
   async fetchTitle(link: TitleLink): Promise<TmdbTitle | undefined> {
     const reference = link.source === 'imdb'
       ? await this.tmdb.findByImdbId(link.imdbId)
-      : { category: TMDB_CATEGORY[link.category], tmdbId: link.tmdbId };
+      : { category: toTmdbCategory(link.category), tmdbId: link.tmdbId };
     return reference && this.tmdb.fetchTitle(reference);
   }
 
   /** Adds a title with both its ids. A concurrent add of the same title fails on the external ids' unique key. */
   async insert(tx: Transaction, title: TmdbTitle): Promise<Movie> {
-    const category = categoryOf(title);
+    const category = toMovieCategory(title.category);
     const [movie] = await tx.insert(movies).values({
       title: title.title,
       originalTitle: title.originalTitle,
@@ -75,8 +74,4 @@ export class MovieResolver {
       .limit(1);
     return row?.movie;
   }
-}
-
-function categoryOf(title: TmdbTitle): MovieCategory {
-  return title.category === 'tv' ? 'series' : 'movie';
 }

@@ -11,6 +11,8 @@ const FIXTURES: Record<string, string> = {
   '/3/find/tt0137523': 'find-tt0137523',
   '/3/find/tt0944947': 'find-tt0944947',
   '/3/find/tt0000000': 'find-tt0000000',
+  '/3/search/multi?query=matrix': 'search-matrix',
+  '/3/search/multi?query=the office': 'search-the-office',
 };
 
 /** A client whose HTTP calls are answered from the fixtures (or with `status`), recording each request. */
@@ -25,8 +27,10 @@ function clientWithFixtures(status?: number, baseUrl = 'https://tmdb.test') {
       if (status !== undefined) return new Response('{}', { status });
 
       const url = new URL(request.url);
-      const language = url.searchParams.get('language');
-      const fixture = FIXTURES[`${url.pathname}${language ? `?language=${language}` : ''}`] ?? 'movie-not-found';
+      const query = url.pathname === '/3/search/multi'
+        ? `?query=${url.searchParams.get('query') ?? ''}`
+        : url.searchParams.has('language') ? `?language=${url.searchParams.get('language') ?? ''}` : '';
+      const fixture = FIXTURES[`${url.pathname}${query}`] ?? 'movie-not-found';
       const body = await Bun.file(new URL(`../../../test/fixtures/tmdb/${fixture}.json`, import.meta.url)).text();
       return new Response(body, { status: fixture === 'movie-not-found' ? 404 : 200 });
     },
@@ -97,6 +101,57 @@ describe('TmdbClient', () => {
   ])('findByImdbId(%s): movies first, then TV, else undefined', async (imdbId, expected) => {
     const { client } = clientWithFixtures();
     expect(await client.findByImdbId(imdbId)).toEqual(expected);
+  });
+
+  describe('search', () => {
+    test('movies and TV shows in relevance order, pt-BR title, original title, year and poster', async () => {
+      const { client } = clientWithFixtures();
+      const results = await client.search('matrix');
+
+      expect(results.slice(0, 5)).toEqual([
+        { category: 'movie', tmdbId: '603', title: 'Matrix', originalTitle: 'The Matrix', year: 1999,
+          posterPath: '/lDqMDI3xpbB9UQRyeXfei0MXhqb.jpg' },
+        { category: 'movie', tmdbId: '604', title: 'Matrix Reloaded', originalTitle: 'The Matrix Reloaded', year: 2003,
+          posterPath: '/ayZkaN2f3ASjWW8ooCfuJT3T8Va.jpg' },
+        { category: 'movie', tmdbId: '624860', title: 'Matrix Resurrections', originalTitle: 'The Matrix Resurrections',
+          year: 2021, posterPath: '/9DT4WVqZqBEI9Kub18gZ3m1D89m.jpg' },
+        { category: 'movie', tmdbId: '605', title: 'Matrix Revolutions', originalTitle: 'The Matrix Revolutions',
+          year: 2003, posterPath: '/92oJ810bYqijBQ8tqYL74mSpPtV.jpg' },
+        { category: 'tv', tmdbId: '711', title: 'Threat Matrix', originalTitle: 'Threat Matrix', year: 2003,
+          posterPath: '/xOeA42Rc9EiIe0dGnwywLqYKetG.jpg' },
+      ]);
+    });
+
+    test('a missing date or poster is null', async () => {
+      const { client } = clientWithFixtures();
+      const results = await client.search('matrix');
+
+      expect(results.find(result => result.tmdbId === '31636')).toMatchObject({ year: null, posterPath: null });
+    });
+
+    test('people are left out, wherever they rank', async () => {
+      const { client } = clientWithFixtures();
+      const office = await client.search('the office');
+
+      expect(office).toHaveLength(19);
+      expect(office.map(result => result.tmdbId)).not.toContain('3328503');
+      expect((await client.search('matrix')).map(result => result.tmdbId)).not.toContain('2766182');
+    });
+
+    test('asks for pt-BR, the first page and no adult titles, with the text encoded', async () => {
+      const { client, requests } = clientWithFixtures();
+      await client.search('the office');
+
+      expect(Object.fromEntries(new URL(requests[0]?.url ?? '').searchParams)).toEqual({
+        query: 'the office', language: 'pt-BR', include_adult: 'false', page: '1',
+      });
+    });
+
+    test('a failure throws', async () => {
+      const { client } = clientWithFixtures(503);
+      const error = await client.search('matrix').catch((reason: unknown) => reason);
+      expect(String(error)).toContain('503');
+    });
   });
 
   test('other failures throw, so a TMDb outage never looks like "not found"', async () => {

@@ -14,6 +14,10 @@ import { MovieResolver } from '~/movies/movie-resolver';
 import { MovieService } from '~/movies/movie-service';
 import { NoopRatingNotifier, TelegramRatingNotifier } from '~/ratings/rating-notifier';
 import { RatingService } from '~/ratings/rating-service';
+import { TitleSearchService } from '~/titles/title-search-service';
+
+/** Searching costs one TMDb call and happens while typing, so it gets more room than rating or signing in. */
+const SEARCHES_PER_RATE_LIMIT_UNIT = 4;
 
 /** Sessions end after 30 days without use. */
 const SESSION_IDLE_TIMEOUT_MS = 30 * 24 * 60 * 60 * 1000;
@@ -34,11 +38,13 @@ const app = createApp({
   corsOrigins: config.corsOrigins,
   ratingsPerMinute: config.rateLimitPerMinute,
   signInsPerMinute: config.rateLimitPerMinute,
+  searchesPerMinute: config.rateLimitPerMinute * SEARCHES_PER_RATE_LIMIT_UNIT,
   checkHealth: async () => {
     await db.execute(sql`SELECT 1`);
   },
   movieService: new MovieService(db),
   ratingService: new RatingService(db, new MovieResolver(db, tmdb), ratingNotifier),
+  titleSearchService: new TitleSearchService(db, tmdb, logger),
   googleIdTokenVerifier: new GoogleIdTokenVerifier({ ...config.google, timeoutMs: 5000 }),
   sessionService: new SessionService(db, { idleTimeoutMs: SESSION_IDLE_TIMEOUT_MS }),
   sessionCookie: new SessionCookie({ domain: config.sessionCookieDomain }),

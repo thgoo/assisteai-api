@@ -47,6 +47,18 @@ export const movieListSchema = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 
+export const titleSearchSchema = z.strictObject({
+  data: z.array(z.strictObject({
+    url: z.url(),
+    category: z.enum(['movie', 'series']),
+    title: z.string(),
+    originalTitle: z.string(),
+    year: z.number().int().nullable(),
+    posterUrl: z.url().nullable(),
+    ratedByMe: z.boolean(),
+  })),
+});
+
 export const userResponseSchema = z.strictObject({
   user: z.strictObject({ name: z.string(), email: z.email(), avatarUrl: z.url().nullable() }),
 });

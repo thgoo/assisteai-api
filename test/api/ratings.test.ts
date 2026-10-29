@@ -2,24 +2,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:tes
 import type { TelegramMessage } from './support/mock';
 import { resetDatabase } from './support/database';
 import { get, post } from './support/http';
-import { resetMock, stubTmdb, telegramMessages } from './support/mock';
+import { resetMock, stubTitle, stubTmdb, telegramMessages, tmdbFixture } from './support/mock';
 import { listedMovies, movieById, ratingsOf, userById } from './support/oracle';
 import { movieDetailSchema, movieListSchema, problemSchema } from './support/schemas';
 import { googleAccountOf, sessionFor } from './support/session';
 
 const FRONTEND_URL = 'https://assisteai.com.br';
-
-/** Real TMDb responses (recorded 2026-10-29). */
-async function tmdbFixture(name: string): Promise<unknown> {
-  return Bun.file(new URL(`../fixtures/tmdb/${name}.json`, import.meta.url)).json() as Promise<unknown>;
-}
-
-async function stubTitle(path: string, fixture: string, overrides: Record<string, unknown> = {}): Promise<void> {
-  for (const language of ['pt-BR', 'en-US']) {
-    const body = { ...(await tmdbFixture(`${fixture}.${language}`) as object), ...overrides };
-    await stubTmdb(path, body, { language });
-  }
-}
 
 const sessions = new Map<number, string>();
 

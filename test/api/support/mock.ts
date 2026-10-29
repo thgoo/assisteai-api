@@ -50,8 +50,26 @@ export async function googleIdToken(account: GoogleAccount, overrides: Record<st
 }
 
 /** Makes TMDb answer `body` for this path (and these query parameters, if given). */
-export async function stubTmdb(path: string, body: unknown, query: Record<string, string> = {}): Promise<void> {
-  await control('POST', '/__tmdb', { path, query, body });
+export async function stubTmdb(
+  path: string,
+  body: unknown,
+  query: Record<string, string> = {},
+  status = 200,
+): Promise<void> {
+  await control('POST', '/__tmdb', { path, query, status, body });
+}
+
+/** A real TMDb response (recorded 2026-10-29). */
+export async function tmdbFixture(name: string): Promise<unknown> {
+  return Bun.file(new URL(`../../fixtures/tmdb/${name}.json`, import.meta.url)).json() as Promise<unknown>;
+}
+
+/** Stubs both languages of a movie or TV show from its recorded responses. */
+export async function stubTitle(path: string, fixture: string, overrides: Record<string, unknown> = {}): Promise<void> {
+  for (const language of ['pt-BR', 'en-US']) {
+    const body = { ...(await tmdbFixture(`${fixture}.${language}`) as object), ...overrides };
+    await stubTmdb(path, body, { language });
+  }
 }
 
 export async function telegramMessages(): Promise<TelegramMessage[]> {

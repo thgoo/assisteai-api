@@ -7,19 +7,23 @@ import type { AuthDependencies } from '~/auth/routes';
 import type { Logger } from '~/logger';
 import type { MovieService } from '~/movies/movie-service';
 import type { RatingService } from '~/ratings/rating-service';
+import type { TitleSearchService } from '~/titles/title-search-service';
 import { createAuthRoutes } from '~/auth/routes';
 import { errorHandler, notFound, ProblemError, problem, problemResponse } from '~/http/errors';
 import { originCheck } from '~/http/origin-check';
 import { requestLogger } from '~/logger';
 import { createMovieRoutes } from '~/movies/routes';
 import { createRatingRoutes } from '~/ratings/routes';
+import { createTitleRoutes } from '~/titles/routes';
 
 export interface AppDependencies extends AuthDependencies {
   logger: Logger;
   corsOrigins: readonly string[];
   movieService: MovieService;
   ratingService: RatingService;
+  titleSearchService: TitleSearchService;
   ratingsPerMinute: number;
+  searchesPerMinute: number;
   /** Resolves when the app can serve requests (the database answers); rejects otherwise. */
   checkHealth: () => Promise<void>;
 }
@@ -29,7 +33,10 @@ const MAX_BODY_BYTES = 16 * 1024;
 
 /** Builds the HTTP app from its collaborators. Wiring them up is `index.ts`'s job, so tests can pass their own. */
 export function createApp(deps: AppDependencies): Hono {
-  const { logger, corsOrigins, movieService, ratingService, ratingsPerMinute, checkHealth, ...auth } = deps;
+  const {
+    logger, corsOrigins, movieService, ratingService, titleSearchService, ratingsPerMinute, searchesPerMinute,
+    checkHealth, ...auth
+  } = deps;
   const app = new Hono();
 
   app.use(requestId());
@@ -64,6 +71,7 @@ export function createApp(deps: AppDependencies): Hono {
   app.route('/', createAuthRoutes(auth));
   app.route('/movies', createMovieRoutes({ movieService }));
   app.route('/ratings', createRatingRoutes({ ratingService, ratingsPerMinute, ...auth }));
+  app.route('/titles', createTitleRoutes({ titleSearchService, searchesPerMinute, ...auth }));
 
   app.notFound(notFound);
   app.onError(errorHandler(logger));
