@@ -115,6 +115,8 @@ the same commands (steps 3–4), on a fresh copy of the target database, and not
    bun migrate.ts       # the target is on 127.0.0.1, so no --allow-remote-target
    bun validate.ts      # must end with "Source and target match row by row."
    ```
+   If the new database was already migrated and nothing was written to either side since, `bun validate.ts` alone
+   (read-only) confirms it and the migration can be skipped.
    **Go / no-go**: anything but a clean validation → unfreeze (undo step 2) and investigate.
 4. **Restart the API** on the migrated data: `pm2 restart api.assisteai.com.br`, then through the temporary hostname:
    `/health`, `/movies`, a few `/movies/:id`.
