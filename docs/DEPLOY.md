@@ -5,7 +5,7 @@ the API under PM2 with Bun, Postgres in Docker bound to `127.0.0.1`, nginx in fr
 
 | | |
 |---|---|
-| Code | `/var/www/assisteai.com.br/assisteai-api` (this repo, `main`) |
+| Code | `/var/www/assisteai-api` (this repo, `main`). Next to it: the front in `/var/www/assisteai.com.br`, the old API in `/var/www/api.assisteai.com.br` (removed after the cutover) |
 | Process | PM2 `api.assisteai.com.br` (`ecosystem.config.cjs`), logs in `~/.pm2/logs/` |
 | Port | `PORT` in `.env` (pick a free one: `ss -ltnp`; the front uses 3003, bargah 3004/3005), on `127.0.0.1` |
 | Database | `deploy/postgres` (Docker), `127.0.0.1:5433` |
@@ -16,9 +16,8 @@ the API under PM2 with Bun, Postgres in Docker bound to `127.0.0.1`, nginx in fr
 Bun 1.3.14, PM2, Docker and Docker Compose are already on the host (bargah uses them).
 
 ```sh
-sudo mkdir -p /var/www/assisteai.com.br && sudo chown ec2-user /var/www/assisteai.com.br
-cd /var/www/assisteai.com.br
-git clone git@github.com:thgoo/assisteai-api.git && cd assisteai-api
+cd /var/www
+sudo git clone git@github.com:thgoo/assisteai-api.git && sudo chown -R ec2-user: assisteai-api && cd assisteai-api
 bun install --frozen-lockfile
 
 # Postgres
@@ -52,7 +51,7 @@ curl -s "127.0.0.1:$(grep ^PORT= .env | cut -d= -f2)/health"     # {"status":"ok
 # Backups
 sudo mkdir -p /var/backups/assisteai && sudo chown ec2-user /var/backups/assisteai
 scripts/pg-backup.sh                                              # once by hand
-crontab -e   # 30 4 * * * /var/www/assisteai.com.br/assisteai-api/scripts/pg-backup.sh >> /home/ec2-user/assisteai-backup.log 2>&1
+crontab -e   # 30 4 * * * /var/www/assisteai-api/scripts/pg-backup.sh >> /home/ec2-user/assisteai-backup.log 2>&1
 ```
 
 ### nginx
@@ -72,7 +71,7 @@ location / {
 ## Updates
 
 ```sh
-cd /var/www/assisteai.com.br/assisteai-api && scripts/deploy.sh
+cd /var/www/assisteai-api && scripts/deploy.sh
 ```
 
 Pulls, installs, migrates, restarts and waits for `/health`. Migrations only ever add, so the running process keeps

@@ -4,7 +4,7 @@
 #   scripts/pg-backup.sh                       # writes to $BACKUP_DIR (default /var/backups/assisteai)
 #
 # Cron (as ec2-user), every day at 04:30 UTC:
-#   30 4 * * * /var/www/assisteai.com.br/assisteai-api/scripts/pg-backup.sh >> $HOME/assisteai-backup.log 2>&1
+#   30 4 * * * /var/www/assisteai-api/scripts/pg-backup.sh >> $HOME/assisteai-backup.log 2>&1
 set -euo pipefail
 
 BACKUP_DIR=${BACKUP_DIR:-/var/backups/assisteai}
