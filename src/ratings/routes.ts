@@ -4,6 +4,7 @@ import type { RatingService } from './rating-service';
 import type { SessionService } from '~/auth/session-service';
 import type { SessionCookie, SessionEnv } from '~/http/session-cookie';
 import { RATING_KEYS } from '~/domain/ratings';
+import { rateLimit } from '~/http/rate-limit';
 import { requireSession } from '~/http/session-cookie';
 import { validate } from '~/http/validation';
 
@@ -25,11 +26,16 @@ export interface RatingDependencies {
   ratingService: RatingService;
   sessionService: SessionService;
   sessionCookie: SessionCookie;
+  /** Rating attempts per user per minute (each new title costs TMDb calls and a Telegram message). */
+  ratingsPerMinute: number;
 }
 
-export function createRatingRoutes({ ratingService, sessionService, sessionCookie }: RatingDependencies) {
+export function createRatingRoutes(deps: RatingDependencies) {
+  const { ratingService, sessionService, sessionCookie, ratingsPerMinute } = deps;
+  const perUser = rateLimit<SessionEnv>({ max: ratingsPerMinute, windowMs: 60_000, key: c => String(c.get('userId')) });
+
   return new Hono<SessionEnv>()
-    .post('/', requireSession(sessionCookie, sessionService), validate('json', newRatingBody), async c => {
+    .post('/', requireSession(sessionCookie, sessionService), perUser, validate('json', newRatingBody), async c => {
       const movie = await ratingService.create({ userId: c.get('userId'), ...c.req.valid('json') });
       return c.json({ movie: { id: movie.id, slug: movie.slug } }, 201);
     });

@@ -5,6 +5,7 @@ import type { SessionService } from './session-service';
 import type { UserRepository } from './user-repository';
 import type { SessionCookie, SessionEnv } from '~/http/session-cookie';
 import { ProblemError } from '~/http/errors';
+import { clientIp, rateLimit } from '~/http/rate-limit';
 import { requireSession } from '~/http/session-cookie';
 import { validate } from '~/http/validation';
 import { userResource } from './serializers';
@@ -14,16 +15,19 @@ export interface AuthDependencies {
   sessionService: SessionService;
   sessionCookie: SessionCookie;
   userRepository: UserRepository;
+  /** Sign-in attempts per client IP per minute. */
+  signInsPerMinute: number;
 }
 
 const signInBody = z.object({ credential: z.string({ error: 'Credencial do Google ausente.' }).min(1) });
 
 export function createAuthRoutes(deps: AuthDependencies) {
-  const { googleIdTokenVerifier, sessionService, sessionCookie, userRepository } = deps;
+  const { googleIdTokenVerifier, sessionService, sessionCookie, userRepository, signInsPerMinute } = deps;
   const signedIn = requireSession(sessionCookie, sessionService);
+  const signInLimit = rateLimit<SessionEnv>({ max: signInsPerMinute, windowMs: 60_000, key: clientIp });
 
   return new Hono<SessionEnv>()
-    .post('/auth/google', validate('json', signInBody), async c => {
+    .post('/auth/google', signInLimit, validate('json', signInBody), async c => {
       const identity = await googleIdTokenVerifier.verify(c.req.valid('json').credential);
       if (!identity) throw new ProblemError(401, 'Não foi possível entrar com o Google. Tente de novo.');
 

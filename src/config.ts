@@ -12,6 +12,10 @@ const databaseEnvSchema = z.object({
 const envSchema = databaseEnvSchema.extend({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
+  /** 127.0.0.1: only nginx on the same host reaches the API (and its forwarded-IP headers can be trusted). */
+  HOST: z.string().default('127.0.0.1'),
+  /** Per minute: sign-ins per client IP, and ratings per user. */
+  RATE_LIMIT_PER_MINUTE: z.coerce.number().int().positive().default(30),
   LOG_LEVEL: z.enum(LOG_LEVELS).optional(),
   /** Frontend origins allowed by CORS and by the CSRF origin check. */
   CORS_ORIGINS: commaSeparated.pipe(z.array(z.url()).min(1)),
@@ -38,6 +42,8 @@ const envSchema = databaseEnvSchema.extend({
 export interface Config {
   env: 'development' | 'production' | 'test';
   port: number;
+  host: string;
+  rateLimitPerMinute: number;
   log: { level: LogLevel; format: LogFormat };
   corsOrigins: string[];
   database: DatabaseConfig;
@@ -59,13 +65,16 @@ export function loadDatabaseConfig(env: Record<string, string | undefined> = pro
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   const {
-    NODE_ENV, PORT, LOG_LEVEL, CORS_ORIGINS, DATABASE_URL, GOOGLE_CLIENT_ID, GOOGLE_JWKS_URL, SESSION_COOKIE_DOMAIN,
+    NODE_ENV, PORT, HOST, RATE_LIMIT_PER_MINUTE, LOG_LEVEL, CORS_ORIGINS, DATABASE_URL,
+    GOOGLE_CLIENT_ID, GOOGLE_JWKS_URL, SESSION_COOKIE_DOMAIN,
     TMDB_API_TOKEN, TMDB_API_URL, FRONTEND_URL, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, TELEGRAM_API_URL,
   } = parse(envSchema, env);
   const isProduction = NODE_ENV === 'production';
   return {
     env: NODE_ENV,
     port: PORT,
+    host: HOST,
+    rateLimitPerMinute: RATE_LIMIT_PER_MINUTE,
     log: {
       level: LOG_LEVEL ?? (isProduction ? 'info' : 'debug'),
       format: isProduction ? 'json' : 'pretty',

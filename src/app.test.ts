@@ -1,14 +1,15 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { HTTPException } from 'hono/http-exception';
 import type { Logger } from '~/logger';
-import { unusedServices } from '~/test-support/unused-services';
+import { ConsoleLogger } from '~/logger';
+import { testSettings, unusedServices } from '~/test-support/unused-services';
 import { createApp } from './app';
 import { ProblemError } from './http/errors';
 
 function appThatThrows(error: Error) {
   const logError = mock();
   const logger: Logger = { debug: mock(), info: mock(), warn: mock(), error: logError, child: () => logger };
-  const app = createApp({ logger, corsOrigins: ['https://assisteai.com.br'], ...unusedServices });
+  const app = createApp({ logger, corsOrigins: ['https://assisteai.com.br'], ...unusedServices, ...testSettings });
   app.get('/throws', () => {
     throw error;
   });
@@ -64,5 +65,44 @@ describe('error handling', () => {
 
     expect(response.headers.get('Access-Control-Allow-Origin')).toBe('https://assisteai.com.br');
     expect(response.headers.get('Access-Control-Allow-Credentials')).toBe('true');
+  });
+});
+
+describe('operations', () => {
+  function app(checkHealth: () => Promise<void>) {
+    const logger = new ConsoleLogger({ level: 'error', format: 'json' });
+    const instance = createApp({
+      logger, corsOrigins: ['https://assisteai.com.br'], ...unusedServices, ...testSettings, checkHealth,
+    });
+    instance.post('/echo', async c => c.json(await c.req.json()));
+    return instance;
+  }
+
+  test('/health: 200 while the database answers, 503 when it doesn\'t', async () => {
+    expect((await app(() => Promise.resolve()).request('/health')).status).toBe(200);
+
+    const down = await app(() => Promise.reject(new Error('connection refused'))).request('/health');
+    expect(down.status).toBe(503);
+    expect(await down.json()).toMatchObject({ status: 503, detail: 'Banco de dados indisponível.' });
+  });
+
+  test('bodies over 16 KB: 413 problem', async () => {
+    const response = await app(() => Promise.resolve()).request('/echo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: 'x'.repeat(17 * 1024) }),
+    });
+
+    expect(response.status).toBe(413);
+    expect(await response.json()).toMatchObject({ status: 413, title: 'Payload Too Large' });
+  });
+
+  test('security headers on every response', async () => {
+    const { headers } = await app(() => Promise.resolve()).request('/health');
+
+    expect(headers.get('X-Content-Type-Options')).toBe('nosniff');
+    expect(headers.get('X-Frame-Options')).toBe('SAMEORIGIN');
+    expect(headers.get('Strict-Transport-Security')).toContain('max-age=');
+    expect(headers.get('Cross-Origin-Resource-Policy')).toBe('same-site');
   });
 });

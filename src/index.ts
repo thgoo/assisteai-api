@@ -1,4 +1,5 @@
 // Composition root: the only place that builds the shared instances and wires them together.
+import { sql } from 'drizzle-orm';
 import { createApp } from '~/app';
 import { GoogleIdTokenVerifier } from '~/auth/google-id-token-verifier';
 import { SessionService } from '~/auth/session-service';
@@ -31,6 +32,11 @@ if (!config.telegram) logger.warn('Telegram is not configured: new ratings won\'
 const app = createApp({
   logger,
   corsOrigins: config.corsOrigins,
+  ratingsPerMinute: config.rateLimitPerMinute,
+  signInsPerMinute: config.rateLimitPerMinute,
+  checkHealth: async () => {
+    await db.execute(sql`SELECT 1`);
+  },
   movieService: new MovieService(db),
   ratingService: new RatingService(db, new MovieResolver(db, tmdb), ratingNotifier),
   googleIdTokenVerifier: new GoogleIdTokenVerifier({ ...config.google, timeoutMs: 5000 }),
@@ -39,7 +45,7 @@ const app = createApp({
   userRepository: new UserRepository(db),
 });
 
-const server = Bun.serve({ port: config.port, fetch: app.fetch });
+const server = Bun.serve({ hostname: config.host, port: config.port, fetch: app.fetch });
 logger.info('Listening', { url: server.url.href, env: config.env });
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {

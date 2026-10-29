@@ -1,4 +1,4 @@
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Database } from '~/db/client';
 import { sessions } from '~/db/schema';
@@ -28,6 +28,8 @@ export class SessionService {
   async create(userId: number): Promise<NewSession> {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = this.expiry();
+    // Expired sessions are refused anyway; sign-ins are rare, so this is where they get cleaned up.
+    await this.db.delete(sessions).where(lt(sessions.expiresAt, this.now()));
     await this.db.insert(sessions).values({ tokenHash: hashToken(token), userId, expiresAt });
     return { token, expiresAt };
   }

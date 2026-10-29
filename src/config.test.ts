@@ -11,6 +11,8 @@ describe('loadConfig', () => {
     expect(loadConfig(REQUIRED)).toEqual({
       env: 'development',
       port: 3000,
+      host: '127.0.0.1',
+      rateLimitPerMinute: 30,
       log: { level: 'debug', format: 'pretty' },
       corsOrigins: ['https://assisteai.com.br', 'https://beta2.assisteai.com.br'],
       database: { url: DATABASE_URL },

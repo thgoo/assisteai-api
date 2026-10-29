@@ -22,8 +22,8 @@ schema and `drizzle/` disagree.
 ```sh
 bun run check                     # typecheck + lint
 bun run test                      # unit tests (next to the code in src/)
-bun run mock & bun run dev        # the API tests need the app and the external API mock running
-bun run test:api                  # black-box HTTP tests in test/api/
+bun run test:api:local            # starts the mock and the app, runs the black-box HTTP tests in test/api/, stops both
+bun run test:api                  # the same tests against an app (and mock) you already have running
 ```
 
 The API tests talk HTTP to `BASE_URL` (default `http://127.0.0.1:3000`) and never import from `src/`. Tests that write

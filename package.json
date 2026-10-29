@@ -15,6 +15,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "bun scripts/seed.ts",
     "test:api": "bun test test/api",
+    "test:api:local": "bun scripts/test-api.ts",
     "mock": "bun test/mock/server.ts"
   },
   "devDependencies": {
