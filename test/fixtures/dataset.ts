@@ -95,7 +95,7 @@ const specialMovies: FixtureMovie[] = [
   // Three ratings: average VERY_GOOD, last UNMISSABLE (not the highest id).
   movie(1, { title: 'Matrix', originalTitle: 'The Matrix', year: 1999, genres: ['Action', 'Science Fiction'] }),
   // Two ratings with mean score 2.5: the average rounds up to COOL.
-  movie(2, { title: 'Ação em Dobro', originalTitle: 'Double Action', genres: ['Ação', 'Comédia'] }),
+  movie(2, { title: 'Ação em Dobro', originalTitle: 'Double Action', genres: ['Action', 'Comedy'] }),
   // A series.
   movie(3, { originalTitle: 'Snowpiercer', category: 'series', year: 2020, genres: ['Drama', 'Sci-Fi & Fantasy'] }),
   // No poster and no backdrop: null image URLs, never picked by /movies/random.
@@ -108,10 +108,20 @@ const specialMovies: FixtureMovie[] = [
 
 const FILLER_IDS = Array.from({ length: 24 }, (_, i) => i + 7);
 
+/** Fillers with titles for the text search: no accent (matched by "Ação"), and LIKE's wildcards as plain text. */
+const FILLER_TITLES: Record<number, string> = {
+  7: 'Acao na Selva',
+  8: '100% Real',
+  9: 'Snake_Case',
+};
+
 // 30 rated movies → the first page has 24, the second 6. Movie 31 has no ratings: not listed, empty rating block.
 export const movies: FixtureMovie[] = [
   ...specialMovies,
-  ...FILLER_IDS.map(id => movie(id, { originalTitle: `Filler Movie ${id}` })),
+  ...FILLER_IDS.map(id => movie(id, {
+    originalTitle: `Filler Movie ${id}`,
+    ...(FILLER_TITLES[id] === undefined ? {} : { title: FILLER_TITLES[id] }),
+  })),
   movie(31, { originalTitle: 'Never Rated' }),
 ];
 

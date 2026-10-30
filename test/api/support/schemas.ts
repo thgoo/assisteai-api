@@ -47,6 +47,19 @@ export const movieListSchema = z.strictObject({
   nextCursor: z.string().nullable(),
 });
 
+export const genreListSchema = z.strictObject({
+  data: z.array(z.strictObject({ name: z.string(), count: z.number().int().positive() })),
+});
+
+export const raterListSchema = z.strictObject({
+  data: z.array(z.strictObject({
+    id: z.number().int(),
+    name: z.string(),
+    avatarUrl: z.url().nullable(),
+    ratingCount: z.number().int().positive(),
+  })),
+});
+
 export const titleSearchSchema = z.strictObject({
   data: z.array(z.strictObject({
     url: z.url(),

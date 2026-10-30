@@ -1,3 +1,4 @@
+import type { SQL, SQLWrapper } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
 /**
@@ -6,4 +7,9 @@ import { sql } from 'drizzle-orm';
  */
 export function textLiterals(values: readonly string[]) {
   return sql.raw(values.map(value => `'${value}'`).join(', '));
+}
+
+/** Alphabetical order regardless of case and accents, the same on every server (byte order, not the locale's). */
+export function byName(name: SQLWrapper): SQL[] {
+  return [sql`lower(unaccent(${name})) COLLATE "C"`, sql`${name} COLLATE "C"`];
 }

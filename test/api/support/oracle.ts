@@ -85,3 +85,75 @@ export function movieDetail(movie: FixtureMovie) {
     })),
   };
 }
+
+export interface ListFilters {
+  q?: string;
+  category?: 'movie' | 'series';
+  genre?: string;
+  minRating?: RatingKey;
+  ratedBy?: number;
+  unratedBy?: number;
+}
+
+export type ListSort = 'recent' | 'rating' | 'popular';
+
+/** Lowercase without accents, like Postgres' `lower(unaccent(…))` for these names. */
+export function folded(text: string): string {
+  return text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+}
+
+function meanScore(movieId: number): number {
+  const list = ratingsOf(movieId);
+  return list.reduce((sum, r) => sum + RATING_KEYS.indexOf(r.rating), 0) / list.length;
+}
+
+function ratedByUser(movieId: number, userId: number): boolean {
+  return ratings.some(r => r.movieId === movieId && r.userId === userId);
+}
+
+/** Rated movies that pass every filter, in the sort's order (doc 05). */
+export function filteredMovies(filters: ListFilters, sort: ListSort = 'recent'): FixtureMovie[] {
+  const { q, category, genre, minRating, ratedBy, unratedBy } = filters;
+  const matches = (movie: FixtureMovie) =>
+    (q === undefined || [movie.title, movie.originalTitle].some(t => folded(t).includes(folded(q))))
+    && (category === undefined || movie.category === category)
+    && (genre === undefined || movie.genres.includes(genre))
+    && (minRating === undefined || meanScore(movie.id) >= RATING_KEYS.indexOf(minRating) - 0.5)
+    && (ratedBy === undefined || ratedByUser(movie.id, ratedBy))
+    && (unratedBy === undefined || !ratedByUser(movie.id, unratedBy));
+
+  const lastRatedAt = (movie: FixtureMovie) => latest(ratingsOf(movie.id))?.createdAt ?? '';
+  const count = (movie: FixtureMovie) => ratingsOf(movie.id).length;
+  const compare: Record<ListSort, (a: FixtureMovie, b: FixtureMovie) => number> = {
+    recent: (a, b) => lastRatedAt(b).localeCompare(lastRatedAt(a)),
+    rating: (a, b) => meanScore(b.id) - meanScore(a.id) || count(b) - count(a),
+    popular: (a, b) => count(b) - count(a) || lastRatedAt(b).localeCompare(lastRatedAt(a)),
+  };
+  return listedMovies().filter(matches).sort((a, b) => compare[sort](a, b) || b.id - a.id);
+}
+
+/** Byte order of the folded name, then of the name: the API's order for names. */
+function byName(a: string, b: string): number {
+  const order = (x: string, y: string) => (x < y ? -1 : x > y ? 1 : 0);
+  return order(folded(a), folded(b)) || order(a, b);
+}
+
+export function genreCounts(): { name: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const movie of listedMovies()) {
+    for (const genre of movie.genres) counts.set(genre, (counts.get(genre) ?? 0) + 1);
+  }
+  return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => byName(a.name, b.name));
+}
+
+export function raters(): { id: number; name: string; avatarUrl: string | null; ratingCount: number }[] {
+  return users
+    .map(user => ({
+      id: user.id,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      ratingCount: ratings.filter(r => r.userId === user.id).length,
+    }))
+    .filter(user => user.ratingCount > 0)
+    .sort((a, b) => byName(a.name, b.name) || a.id - b.id);
+}

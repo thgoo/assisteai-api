@@ -15,6 +15,20 @@
       "when": 1793283956847,
       "tag": "0001_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793387264639,
+      "tag": "0002_unaccent",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793387265004,
+      "tag": "0003_english_genres",
+      "breakpoints": true
     }
   ]
 }

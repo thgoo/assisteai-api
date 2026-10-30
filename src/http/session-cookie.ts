@@ -35,15 +35,25 @@ export class SessionCookie {
   }
 }
 
+const SIGN_IN_REQUIRED = 'Faça login para continuar.';
+
 /** 401 unless the request carries a live session. */
 export function requireSession(cookie: SessionCookie, sessions: SessionService): MiddlewareHandler<SessionEnv> {
   return async (c, next) => {
     const token = cookie.read(c);
     const userId = token === undefined ? undefined : await sessions.authenticate(token);
-    if (userId === undefined || token === undefined) throw new ProblemError(401, 'Faça login para continuar.');
+    if (userId === undefined || token === undefined) throw new ProblemError(401, SIGN_IN_REQUIRED);
 
     c.set('userId', userId);
     c.set('sessionToken', token);
     await next();
   };
+}
+
+/** The signed-in user's id, for a public route where one option needs a session; 401 without a live one. */
+export async function signedInUserId(c: Context, cookie: SessionCookie, sessions: SessionService): Promise<number> {
+  const token = cookie.read(c);
+  const userId = token === undefined ? undefined : await sessions.authenticate(token);
+  if (userId === undefined) throw new ProblemError(401, SIGN_IN_REQUIRED);
+  return userId;
 }
