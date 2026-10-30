@@ -32,7 +32,10 @@ const listQuery = z.object({
     .transform(value => (value === '' ? undefined : value)),
   category: z.enum(MOVIE_CATEGORIES, INVALID_FILTER).optional(),
   genre: z.string(INVALID_FILTER).trim().min(1, INVALID_FILTER.error).max(100, INVALID_FILTER.error).optional(),
-  minRating: z.enum(RATING_KEYS, INVALID_FILTER).optional(),
+  /** Comma-separated rating keys; blank: no filter. */
+  average: z.string(INVALID_FILTER).optional()
+    .transform(value => (value?.trim() ? [...new Set(value.split(',').map(key => key.trim()))] : undefined))
+    .pipe(z.array(z.enum(RATING_KEYS, INVALID_FILTER)).optional()),
   ratedBy: z.string(INVALID_FILTER).regex(/^[1-9][0-9]{0,14}$/, INVALID_FILTER.error).transform(Number).optional(),
   unratedByMe: z.literal('true', INVALID_FILTER).optional(),
   sort: z.enum(MOVIE_SORTS, INVALID_FILTER).default('recent'),
@@ -51,12 +54,12 @@ export interface MovieDependencies {
 export function createMovieRoutes({ movieService, sessionService, sessionCookie }: MovieDependencies) {
   return new Hono()
     .get('/', validate('query', listQuery), async c => {
-      const { q, category, genre, minRating, ratedBy, unratedByMe, sort, cursor } = c.req.valid('query');
+      const { q, category, genre, average, ratedBy, unratedByMe, sort, cursor } = c.req.valid('query');
       const filters: MovieFilters = {
         text: q,
         category,
         genre,
-        minRating,
+        averages: average,
         ratedBy,
         unratedBy: unratedByMe ? await signedInUserId(c, sessionCookie, sessionService) : undefined,
       };

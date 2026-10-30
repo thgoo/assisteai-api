@@ -90,7 +90,7 @@ export interface ListFilters {
   q?: string;
   category?: 'movie' | 'series';
   genre?: string;
-  minRating?: RatingKey;
+  averages?: RatingKey[];
   ratedBy?: number;
   unratedBy?: number;
 }
@@ -113,12 +113,12 @@ function ratedByUser(movieId: number, userId: number): boolean {
 
 /** Rated movies that pass every filter, in the sort's order (doc 05). */
 export function filteredMovies(filters: ListFilters, sort: ListSort = 'recent'): FixtureMovie[] {
-  const { q, category, genre, minRating, ratedBy, unratedBy } = filters;
+  const { q, category, genre, averages, ratedBy, unratedBy } = filters;
   const matches = (movie: FixtureMovie) =>
     (q === undefined || [movie.title, movie.originalTitle].some(t => folded(t).includes(folded(q))))
     && (category === undefined || movie.category === category)
     && (genre === undefined || movie.genres.includes(genre))
-    && (minRating === undefined || meanScore(movie.id) >= RATING_KEYS.indexOf(minRating) - 0.5)
+    && (averages === undefined || averages.some(key => key === ratingSummary(movie.id).average))
     && (ratedBy === undefined || ratedByUser(movie.id, ratedBy))
     && (unratedBy === undefined || !ratedByUser(movie.id, unratedBy));
 

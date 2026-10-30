@@ -40,8 +40,8 @@ export interface MovieFilters {
   text?: string;
   category?: MovieCategory;
   genre?: string;
-  /** Average rating at this key or better. */
-  minRating?: RatingKey;
+  /** The average rating (the rounded key the summary shows) is one of these. */
+  averages?: RatingKey[];
   ratedBy?: number;
   unratedBy?: number;
 }
@@ -79,6 +79,8 @@ const summary = {
   `,
 };
 
+const scoreOf = (key: RatingKey) => RATING_KEYS.indexOf(key);
+
 const lastRatedAt = max(ratings.createdAt);
 const meanScore = sql`avg(${score})`;
 const ratingCount = count(ratings.id);
@@ -109,7 +111,7 @@ export class MovieService {
       eq(filterRatings.movieId, movies.id),
       eq(filterRatings.userId, userId),
     )));
-    const { text, category, genre, minRating } = filters;
+    const { text, category, genre, averages } = filters;
 
     const rows = await this.db
       .select({ movie: movies, summary, lastRatedAt, meanScore: sql<string>`${meanScore}::text`, ratingCount })
@@ -124,8 +126,8 @@ export class MovieService {
       ))
       .groupBy(movies.id)
       .having(and(
-        // The average is the key at the mean rounded half up, so it reaches a key from half a point below.
-        minRating && sql`${meanScore} >= ${String(RATING_KEYS.indexOf(minRating) - 0.5)}::numeric`,
+        // The average is the key at the mean score rounded half up, as `averageRating` rounds it.
+        averages && sql`floor(${meanScore} + 0.5)::int IN (${sql.join(averages.map(scoreOf), sql`, `)})`,
         after && startsAfter(after),
       ))
       .orderBy(...ORDER[sort], desc(movies.id))

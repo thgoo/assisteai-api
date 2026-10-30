@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import type { RatingKey } from '../fixtures/dataset';
 import type { ListFilters, ListSort } from './support/oracle';
 import { resetDatabase } from './support/database';
 import { get } from './support/http';
@@ -74,20 +75,41 @@ describe('GET /movies filters and sorts', () => {
     expect(await allPages(params)).toEqual(expected(filters));
   });
 
-  test('minRating: average at that key or better (a mean half a point below rounds up into it)', async () => {
-    // Movie 2's mean score is 2.5: its average is COOL.
-    expect((await allPages({ minRating: 'COOL' })).map(movie => movie.id)).toContain(2);
-    expect((await allPages({ minRating: 'GOOD' })).map(movie => movie.id)).not.toContain(2);
-    for (const minRating of ['STAY_AWAY', 'COOL', 'VERY_GOOD', 'UNMISSABLE'] as const) {
-      expect(await allPages({ minRating })).toEqual(expected({ minRating }));
-    }
+  describe('average: the rounded average the summary shows is one of the keys', () => {
+    test.each<[string, RatingKey[]]>([
+      ['VERY_GOOD', ['VERY_GOOD']],
+      ['UNMISSABLE,COOL', ['UNMISSABLE', 'COOL']],
+      [' GOOD , GOOD ', ['GOOD']],
+    ])('average=%p', async (average, keys) => {
+      const movies = await allPages({ average });
+
+      expect(movies.length).toBeGreaterThan(0);
+      expect(movies).toEqual(expected({ averages: keys }));
+      expect(movies.every(movie => movie.rating.average !== null && keys.includes(movie.rating.average))).toBeTrue();
+    });
+
+    test('means half a point below a key round up into it, as in the summary', async () => {
+      // Movie 2's mean score is 2.5 (COOL), movie 5's is 0.5 (VERY_BAD).
+      expect((await allPages({ average: 'COOL' })).map(movie => movie.id)).toContain(2);
+      expect((await allPages({ average: 'BAD' })).map(movie => movie.id)).not.toContain(2);
+      expect((await allPages({ average: 'VERY_BAD' })).map(movie => movie.id)).toEqual([5]);
+    });
+
+    test('a key no movie has: an empty list', async () => {
+      expect(await allPages({ average: 'STAY_AWAY' })).toEqual([]);
+    });
+
+    test('blank: no filter', async () => {
+      expect(await allPages({ average: '' })).toEqual(expected({}));
+    });
   });
 
   test('filters combine with AND, and the rating summary stays global', async () => {
-    const params = { category: 'movie', genre: 'Action', minRating: 'GOOD', ratedBy: '2' };
+    const params = { category: 'movie', genre: 'Action', average: 'GOOD,VERY_GOOD', ratedBy: '2' };
     const movies = await allPages(params);
 
-    expect(movies).toEqual(expected({ category: 'movie', genre: 'Action', minRating: 'GOOD', ratedBy: 2 }));
+    const averages: RatingKey[] = ['GOOD', 'VERY_GOOD'];
+    expect(movies).toEqual(expected({ category: 'movie', genre: 'Action', averages, ratedBy: 2 }));
     expect(movies.map(movie => movie.id)).toEqual([1]);
     expect(movies[0]?.rating.count).toBe(3);
   });
@@ -123,15 +145,16 @@ describe('GET /movies filters and sorts', () => {
   });
 
   test.each([
-    'category=film', 'minRating=AMAZING', 'sort=best', `q=${'x'.repeat(101)}`, 'ratedBy=abc', 'ratedBy=0',
-    'ratedBy=1234567890123456', 'unratedByMe=yes', 'genre=',
+    'category=film', 'average=AMAZING', 'average=GOOD,AMAZING', 'average=GOOD,', 'sort=best', `q=${'x'.repeat(101)}`,
+    'ratedBy=abc', 'ratedBy=0', 'ratedBy=1234567890123456', 'unratedByMe=yes', 'genre=',
   ])('invalid %s: 422 with the parameter in errors', async query => {
     const response = await get(`/movies?${query}`);
 
     expect(response.status).toBe(422);
     const problem = problemSchema.parse(response.body);
     expect(problem.detail).toBe('Filtro inválido.');
-    expect(problem.errors?.map(error => error.path)).toEqual([query.split('=')[0] ?? '']);
+    // The parameter's name, then the list position for an item of `average`.
+    expect(problem.errors?.map(error => error.path.split('.')[0])).toEqual([query.split('=')[0] ?? '']);
   });
 });
 
