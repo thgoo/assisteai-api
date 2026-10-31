@@ -24,7 +24,7 @@ export interface MovieRating {
   rating: RatingKey;
   comment: string | null;
   createdAt: Date;
-  user: { name: string; avatarUrl: string | null };
+  user: { id: number; name: string; avatarUrl: string | null };
 }
 
 export type MovieDetail = RatedMovie & { ratings: MovieRating[] };
@@ -172,7 +172,7 @@ export class MovieService {
           rating: ratings.rating,
           comment: ratings.comment,
           createdAt: ratings.createdAt,
-          user: { name: users.name, avatarUrl: users.avatarUrl },
+          user: { id: users.id, name: users.name, avatarUrl: users.avatarUrl },
         })
         .from(ratings)
         .innerJoin(users, eq(users.id, ratings.userId))

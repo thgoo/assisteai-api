@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import type { RatingNotifier } from './rating-notifier';
-import type { Database } from '~/db/client';
+import type { Database, Transaction } from '~/db/client';
 import type { RatingKey } from '~/domain/ratings';
 import type { Movie, MovieResolver } from '~/movies/movie-resolver';
 import { isUniqueViolation } from '~/db/errors';
@@ -8,9 +8,12 @@ import { ratings, users } from '~/db/schema';
 import { ProblemError } from '~/http/errors';
 import { parseTitleLink } from './title-link';
 
+/** What's being rated: a title by its IMDb or TMDb link, or a movie already here. */
+export type RatingTarget = { url: string } | { movieId: number };
+
 export interface NewRatingInput {
   userId: number;
-  url: string;
+  target: RatingTarget;
   rating: RatingKey;
   comment: string | null;
 }
@@ -18,6 +21,7 @@ export interface NewRatingInput {
 export const RATING_MESSAGES = {
   invalidLink: 'Link do IMDb ou do TMDb inválido.',
   notOnTmdb: 'Não encontramos esse título no TMDb.',
+  unknownMovie: 'Título não encontrado.',
   alreadyRated: { movie: 'Você já avaliou esse filme.', series: 'Você já avaliou essa série.' },
 };
 
@@ -28,29 +32,43 @@ export class RatingService {
     private readonly notifier: RatingNotifier,
   ) {}
 
-  /** Rates the title a link points to, adding it from TMDb when it's new. Returns the rated movie. */
+  /** Rates a movie, adding it from TMDb when a link points to a new title. Returns the rated movie. */
   async create(input: NewRatingInput): Promise<Movie> {
+    const { target } = input;
+    if ('movieId' in target) {
+      const movie = await this.movieResolver.findById(target.movieId);
+      if (!movie) throw new ProblemError(404, RATING_MESSAGES.unknownMovie);
+      return this.rate(input, () => movie);
+    }
     try {
-      return await this.tryCreate(input);
+      return await this.rateLinked(input, target.url);
     } catch (error) {
       // Someone added the same title at the same moment: it exists now, so the second attempt rates it.
       if (!isUniqueViolation(error, 'external_ids_source_category_external_id_unique')) throw error;
-      return this.tryCreate(input);
+      return this.rateLinked(input, target.url);
     }
   }
 
-  private async tryCreate({ userId, url, rating, comment }: NewRatingInput): Promise<Movie> {
+  private async rateLinked(input: NewRatingInput, url: string): Promise<Movie> {
     const link = parseTitleLink(url);
     if (!link) throw urlProblem(RATING_MESSAGES.invalidLink);
 
-    let existing = await this.movieResolver.find(link);
-    const title = existing ? undefined : await this.movieResolver.fetchTitle(link);
-    if (!existing && !title) throw urlProblem(RATING_MESSAGES.notOnTmdb);
-    if (title) existing = await this.movieResolver.findByTitle(title);
+    const existing = await this.movieResolver.find(link);
+    if (existing) return this.rate(input, () => existing);
 
+    const title = await this.movieResolver.fetchTitle(link);
+    if (!title) throw urlProblem(RATING_MESSAGES.notOnTmdb);
+    const stored = await this.movieResolver.findByTitle(title);
+    return this.rate(input, tx => stored ?? this.movieResolver.insert(tx, title));
+  }
+
+  /** Inserts the rating on the movie `movieIn` gives (it may add it in the same transaction), then notifies. */
+  private async rate(
+    { userId, rating, comment }: NewRatingInput,
+    movieIn: (tx: Transaction) => Movie | Promise<Movie>,
+  ): Promise<Movie> {
     const { movie, userName } = await this.db.transaction(async tx => {
-      const target = existing ?? (title && await this.movieResolver.insert(tx, title));
-      if (!target) throw new Error('Unreachable: no movie and no title');
+      const target = await movieIn(tx);
       try {
         await tx.insert(ratings).values({ userId, movieId: target.id, rating, comment });
       } catch (error) {

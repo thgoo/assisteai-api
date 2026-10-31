@@ -27,7 +27,7 @@ describe('auth', () => {
 
       expect(response.status).toBe(200);
       expect(userResponseSchema.parse(response.body)).toEqual({
-        user: { name: ana.name, email: ana.email, avatarUrl: ana.avatarUrl },
+        user: { id: ana.id, name: ana.name, email: ana.email, avatarUrl: ana.avatarUrl },
       });
       const cookie = sessionCookie(response);
       expect(cookie?.value).toMatch(/^[\w-]{43}$/);
@@ -53,7 +53,7 @@ describe('auth', () => {
       const response = await me(await sessionFor(newcomer));
 
       expect(userResponseSchema.parse(response.body).user).toEqual({
-        name: 'Diego Novo', email: 'diego@example.com', avatarUrl: null,
+        id: expect.any(Number), name: 'Diego Novo', email: 'diego@example.com', avatarUrl: null,
       });
       expect(users.map(u => u.email)).not.toContain('diego@example.com');
     });

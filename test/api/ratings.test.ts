@@ -59,7 +59,13 @@ describe('POST /ratings', () => {
 
   describe('validation: 422 with a message for the user', () => {
     test.each([
-      [{ rating: 'GOOD' }, 'Informe o link do IMDb ou do TMDb.'],
+      [{ rating: 'GOOD' }, 'Informe o título.'],
+      [{ url: 'https://www.imdb.com/title/tt1000004/', movieId: 4, rating: 'GOOD' }, 'Informe o título.'],
+      [{ movieId: '4', rating: 'GOOD' }, 'Informe o título.'],
+      [{ movieId: 4.5, rating: 'GOOD' }, 'Informe o título.'],
+      [{ movieId: 0, rating: 'GOOD' }, 'Informe o título.'],
+      [{ movieId: 2 ** 31, rating: 'GOOD' }, 'Informe o título.'],
+      [{ movieId: 4 }, 'Escolha uma avaliação.'],
       [{ url: '   ', rating: 'GOOD' }, 'Informe o link do IMDb ou do TMDb.'],
       [{ url: 'https://www.imdb.com/title/tt1000004/' }, 'Escolha uma avaliação.'],
       [{ url: 'https://www.imdb.com/title/tt1000004/', rating: 'AMAZING' }, 'Escolha uma avaliação.'],
@@ -75,6 +81,15 @@ describe('POST /ratings', () => {
       await expectProblem(rate(1, { url: 'https://www.themoviedb.org/movie/999999999', rating: 'GOOD' }),
         422, 'Não encontramos esse título no TMDb.');
     });
+  });
+
+  test('an unknown movie id: 404', async () => {
+    await expectProblem(rate(1, { movieId: 999_999, rating: 'GOOD' }), 404, 'Título não encontrado.');
+  });
+
+  test('rating a movie twice by its id: 409', async () => {
+    await expectProblem(rate(1, { movieId: 1, rating: 'GOOD' }), 409, 'Você já avaliou esse filme.');
+    await expectProblem(rate(2, { movieId: 3, rating: 'GOOD' }), 409, 'Você já avaliou essa série.');
   });
 
   test('rating a movie twice: 409 (found by its IMDb link)', async () => {
@@ -107,6 +122,17 @@ describe('POST /ratings', () => {
       `<a href="${FRONTEND_URL}/movies/4-no-images">No Images (2010)</a>\n\n`
       + '<i>Ótimo &lt;mesmo&gt; sem imagens &amp; tal.</i>\n\n<b>Muito Bom</b> - Carla Dias',
     );
+  });
+
+  test('rating a known movie by its id: 201, rated by that user, and Telegram is notified', async () => {
+    const movie = movieById(6);
+    const result = await created(rate(3, { movieId: movie.id, rating: 'GOOD', comment: '  ' }));
+
+    expect(result).toEqual({ id: movie.id, slug: movie.slug });
+    expect((await detail(movie.id)).ratings.at(-1)).toMatchObject({
+      rating: 'GOOD', comment: null, user: { id: 3, name: userById(3).name },
+    });
+    expect((await nextTelegramMessage()).text).toEndWith(`<b>Bom</b> - ${userById(3).name}`);
   });
 
   test('a new movie from a TMDb link: added from TMDb with both ids, so its IMDb link finds it', async () => {

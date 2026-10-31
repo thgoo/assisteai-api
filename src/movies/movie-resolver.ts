@@ -13,6 +13,11 @@ export type Movie = typeof movies.$inferSelect;
 export class MovieResolver {
   constructor(private readonly db: Database, private readonly tmdb: TmdbClient) {}
 
+  async findById(id: number): Promise<Movie | undefined> {
+    const [movie] = await this.db.select().from(movies).where(eq(movies.id, id)).limit(1);
+    return movie;
+  }
+
   async find(link: TitleLink): Promise<Movie | undefined> {
     return link.source === 'imdb'
       ? this.findBy([{ source: 'imdb', externalId: link.imdbId }])

@@ -81,7 +81,7 @@ export function movieDetail(movie: FixtureMovie) {
       rating: r.rating,
       comment: r.comment,
       createdAt: new Date(r.createdAt).toISOString(),
-      user: { name: userById(r.userId).name, avatarUrl: userById(r.userId).avatarUrl },
+      user: { id: r.userId, name: userById(r.userId).name, avatarUrl: userById(r.userId).avatarUrl },
     })),
   };
 }

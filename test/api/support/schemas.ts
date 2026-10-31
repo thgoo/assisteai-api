@@ -38,7 +38,7 @@ export const movieDetailSchema = movieSummarySchema.extend({
     rating: ratingKey,
     comment: z.string().nullable(),
     createdAt: z.iso.datetime(),
-    user: z.strictObject({ name: z.string(), avatarUrl: z.url().nullable() }),
+    user: z.strictObject({ id: z.number().int(), name: z.string(), avatarUrl: z.url().nullable() }),
   })),
 });
 
@@ -73,5 +73,7 @@ export const titleSearchSchema = z.strictObject({
 });
 
 export const userResponseSchema = z.strictObject({
-  user: z.strictObject({ name: z.string(), email: z.email(), avatarUrl: z.url().nullable() }),
+  user: z.strictObject({
+    id: z.number().int(), name: z.string(), email: z.email(), avatarUrl: z.url().nullable(),
+  }),
 });
