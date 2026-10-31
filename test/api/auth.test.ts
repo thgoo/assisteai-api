@@ -52,10 +52,10 @@ describe('auth', () => {
       const newcomer = { sub: '300000000000000000099', email: 'diego@example.com', name: 'Diego Novo' };
       const response = await me(await sessionFor(newcomer));
 
-      expect(userResponseSchema.parse(response.body).user).toEqual({
-        id: expect.any(Number), name: 'Diego Novo', email: 'diego@example.com', avatarUrl: null,
-      });
+      const { id, ...profile } = userResponseSchema.parse(response.body).user;
+      expect(profile).toEqual({ name: 'Diego Novo', email: 'diego@example.com', avatarUrl: null });
       expect(users.map(u => u.email)).not.toContain('diego@example.com');
+      expect(users.map(u => u.id)).not.toContain(id);
     });
 
     test('name and avatar are refreshed from Google on every sign-in', async () => {
