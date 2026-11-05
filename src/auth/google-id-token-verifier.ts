@@ -32,12 +32,23 @@ export interface GoogleIdTokenVerifierOptions {
 const DEFAULT_KEYS_TTL_MS = 60 * 60 * 1000;
 
 /**
+ * After a failed key fetch, nothing that needs a fetch calls Google for this long (it throws instead); after a
+ * fetch for an unknown `kid` that worked but lacked it, unknown `kid`s skip refetching for this long.
+ */
+const UNKNOWN_KID_REFETCH_COOLDOWN_MS = 10_000;
+
+/**
  * Verifies Google Identity Services ID tokens (the `credential` the frontend gets on sign-in): RS256 signature with
  * Google's published keys, issuer, audience, expiry and a verified email.
  */
 export class GoogleIdTokenVerifier {
   private keys: HonoJsonWebKey[] = [];
   private keysExpireAt = 0;
+  /** Last failed fetch, on any path; cleared by any successful fetch. */
+  private lastFetchFailedAt = Number.NEGATIVE_INFINITY;
+  /** Last successful fetch for an unknown `kid` on a fresh cache that still lacked it. */
+  private lastUnknownKidMissAt = Number.NEGATIVE_INFINITY;
+  private inFlightRefresh: Promise<void> | undefined;
   private readonly fetch: (request: Request) => Promise<Response>;
   private readonly now: () => number;
 
@@ -73,11 +84,48 @@ export class GoogleIdTokenVerifier {
     }
   }
 
-  /** Cached keys, refreshed when they expire or when a token names a key we don't have yet (Google rotates them). */
+  /**
+   * Cached keys, refreshed when they expire or when a token names a key we don't have yet (Google rotates them).
+   * A known `kid` on fresh keys never waits on a cooldown. Otherwise, within the failure cooldown this throws without
+   * calling Google, and within the miss cooldown an unknown `kid` gets the cached keys (an invalid token).
+   */
   private async keysFor(kid: string): Promise<HonoJsonWebKey[]> {
-    const known = this.keys.some(key => key.kid === kid);
-    if (!known || this.now() >= this.keysExpireAt) await this.refreshKeys();
+    const fresh = this.now() < this.keysExpireAt;
+    if (fresh && this.hasKey(kid)) return this.keys;
+    if (this.inCooldown(this.lastFetchFailedAt)) {
+      throw new Error('Google JWKS fetch failed recently; not refetching yet');
+    }
+    if (fresh && this.inCooldown(this.lastUnknownKidMissAt)) return this.keys;
+
+    await this.refreshKeysOnce();
+    if (fresh && !this.hasKey(kid)) this.lastUnknownKidMissAt = this.now();
     return this.keys;
+  }
+
+  private inCooldown(since: number): boolean {
+    return this.now() - since < UNKNOWN_KID_REFETCH_COOLDOWN_MS;
+  }
+
+  private hasKey(kid: string): boolean {
+    return this.keys.some(key => key.kid === kid);
+  }
+
+  /** Concurrent callers share the refetch in progress. */
+  private refreshKeysOnce(): Promise<void> {
+    this.inFlightRefresh ??= this.refreshKeysTrackingFailure().finally(() => {
+      this.inFlightRefresh = undefined;
+    });
+    return this.inFlightRefresh;
+  }
+
+  private async refreshKeysTrackingFailure(): Promise<void> {
+    try {
+      await this.refreshKeys();
+    } catch (error) {
+      this.lastFetchFailedAt = this.now();
+      throw error;
+    }
+    this.lastFetchFailedAt = Number.NEGATIVE_INFINITY;
   }
 
   private async refreshKeys(): Promise<void> {

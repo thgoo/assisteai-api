@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'bun:test';
+import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { sign } from 'hono/jwt';
 import type { HonoJsonWebKey } from 'hono/utils/jwt/jws';
 import { GoogleIdTokenVerifier } from './google-id-token-verifier';
@@ -34,14 +34,16 @@ function claims(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function verifier() {
+function verifier(options: { now?: () => number; failing?: () => boolean } = {}) {
   let jwksFetches = 0;
   const instance = new GoogleIdTokenVerifier({
     clientId: CLIENT_ID,
     jwksUrl: 'https://keys.test/certs',
     timeoutMs: 1000,
+    now: options.now,
     fetch: () => {
       jwksFetches += 1;
+      if (options.failing?.() === true) return Promise.resolve(new Response('unavailable', { status: 503 }));
       const { kty, n, e } = publicJwk;
       return Promise.resolve(Response.json(
         { keys: [{ kty, n, e, alg: 'RS256', kid: 'k1' }] },
@@ -107,5 +109,169 @@ describe('GoogleIdTokenVerifier', () => {
 
     expect(failure).toBeInstanceOf(Error);
     expect((failure as Error).message).toContain('503');
+  });
+
+  describe('refetches for unknown kids', () => {
+    let clock = 0;
+    const tick = (ms: number) => { clock += ms; };
+    const known = () => sign(claims(), privateJwk, 'RS256');
+    const withKid = (kid: string) => sign(claims(), { ...privateJwk, kid }, 'RS256');
+    const fails = (promise: Promise<unknown>) => promise.then(() => false, () => true);
+
+    beforeEach(() => {
+      clock = 1_000_000;
+    });
+
+    async function primed(options: { failing?: () => boolean } = {}) {
+      const subject = verifier({ ...options, now: () => clock });
+      expect(await subject.instance.verify(await known())).toBeDefined();
+      expect(subject.fetches()).toBe(1);
+      return subject;
+    }
+
+    test('after a miss, unknown kids are rejected without a fetch for 10 s', async () => {
+      const { instance, fetches } = await primed();
+
+      expect(await instance.verify(await withKid('x1'))).toBeUndefined();
+      expect(fetches()).toBe(2);
+
+      tick(5_000);
+      expect(await instance.verify(await withKid('x2'))).toBeUndefined();
+      expect(fetches()).toBe(2);
+
+      tick(6_000);
+      expect(await instance.verify(await withKid('x3'))).toBeUndefined();
+      expect(fetches()).toBe(3);
+    });
+
+    test('the known kid keeps verifying during the cooldown, with no fetch', async () => {
+      const { instance, fetches } = await primed();
+      await instance.verify(await withKid('x1'));
+
+      tick(5_000);
+      expect(await instance.verify(await known())).toMatchObject({ sub: '1001' });
+      expect(fetches()).toBe(2);
+    });
+
+    test('expired keys are refetched despite the cooldown', async () => {
+      const { instance, fetches } = await primed();
+      await instance.verify(await withKid('x1'));
+
+      tick(3_600_000);
+      expect(await instance.verify(await withKid('x2'))).toBeUndefined();
+      expect(fetches()).toBe(3);
+    });
+
+    test('a failed refetch throws, and unknown kids keep throwing without a fetch for 10 s', async () => {
+      let failing = false;
+      const { instance, fetches } = await primed({ failing: () => failing });
+
+      failing = true;
+      expect(await fails(instance.verify(await withKid('x1')))).toBe(true);
+      expect(fetches()).toBe(2);
+
+      tick(5_000);
+      expect(await fails(instance.verify(await withKid('x2')))).toBe(true);
+      expect(fetches()).toBe(2);
+
+      tick(6_000);
+      expect(await fails(instance.verify(await withKid('x3')))).toBe(true);
+      expect(fetches()).toBe(3);
+    });
+
+    test('a refetch that works but lacks the kid gives undefined, also inside the cooldown', async () => {
+      const { instance, fetches } = await primed();
+
+      expect(await fails(instance.verify(await withKid('x1')))).toBe(false);
+      tick(5_000);
+      const second = instance.verify(await withKid('x2'));
+
+      expect(await fails(second)).toBe(false);
+      expect(await second).toBeUndefined();
+      expect(fetches()).toBe(2);
+    });
+
+    test('a successful refetch after a failed one clears the failure', async () => {
+      let failing = false;
+      const { instance, fetches } = await primed({ failing: () => failing });
+
+      failing = true;
+      expect(await fails(instance.verify(await withKid('x1')))).toBe(true);
+
+      failing = false;
+      tick(11_000);
+      expect(await instance.verify(await withKid('x2'))).toBeUndefined();
+      expect(fetches()).toBe(3);
+
+      tick(5_000);
+      expect(await instance.verify(await withKid('x3'))).toBeUndefined();
+      expect(fetches()).toBe(3);
+    });
+
+    test('the known kid on fresh keys keeps verifying during a failure cooldown, with no fetch', async () => {
+      let failing = false;
+      const { instance, fetches } = await primed({ failing: () => failing });
+
+      failing = true;
+      expect(await fails(instance.verify(await withKid('x1')))).toBe(true);
+
+      tick(5_000);
+      expect(await instance.verify(await known())).toMatchObject({ sub: '1001' });
+      expect(fetches()).toBe(2);
+    });
+
+    test('a failed fetch on an empty cache starts the failure cooldown', async () => {
+      let failing = true;
+      const { instance, fetches } = verifier({ now: () => clock, failing: () => failing });
+
+      expect(await fails(instance.verify(await known()))).toBe(true);
+      expect(fetches()).toBe(1);
+
+      tick(5_000);
+      failing = false;
+      expect(await fails(instance.verify(await known()))).toBe(true);
+      expect(await fails(instance.verify(await withKid('x1')))).toBe(true);
+      expect(fetches()).toBe(1);
+
+      tick(6_000);
+      expect(await instance.verify(await known())).toMatchObject({ sub: '1001' });
+      expect(fetches()).toBe(2);
+    });
+
+    test('a failed fetch on an expired cache starts the failure cooldown', async () => {
+      let failing = false;
+      const { instance, fetches } = await primed({ failing: () => failing });
+
+      tick(3_600_000);
+      failing = true;
+      expect(await fails(instance.verify(await known()))).toBe(true);
+      expect(fetches()).toBe(2);
+
+      tick(5_000);
+      failing = false;
+      expect(await fails(instance.verify(await known()))).toBe(true);
+      expect(fetches()).toBe(2);
+
+      tick(6_000);
+      expect(await instance.verify(await known())).toMatchObject({ sub: '1001' });
+      expect(fetches()).toBe(3);
+    });
+
+    test('concurrent verifications on an empty cache share one fetch', async () => {
+      const { instance, fetches } = verifier({ now: () => clock });
+      const tokens = await Promise.all(['x1', 'x2', 'x3', 'x4', 'x5'].map(withKid));
+
+      const results = await Promise.all(tokens.map(token => instance.verify(token)));
+
+      expect(results).toEqual([undefined, undefined, undefined, undefined, undefined]);
+      expect(fetches()).toBe(1);
+    });
+
+    test('the first refetch on an empty cache that finds the kid starts no cooldown', async () => {
+      const { instance, fetches } = await primed();
+
+      expect(await instance.verify(await withKid('x1'))).toBeUndefined();
+      expect(fetches()).toBe(2);
+    });
   });
 });
