@@ -8,6 +8,7 @@
 //   POST /__tmdb       {path, query?, status?, body} → response for a TMDb path, e.g. "/3/movie/603"
 //   POST /__google/id-token  {claims, kid?} → { idToken }: a Google ID token signed with the key the mock publishes
 //                            at /www.googleapis.com/oauth2/v3/certs (generated at startup, never stored)
+//   POST /__google/jwks      {status} → Google's keys URL answers this status (an error) until the next reset
 // Anything not stubbed answers like the real API would for an unknown resource.
 //   bun test/mock/server.ts   (port: MOCK_PORT, default 8080)
 
@@ -46,6 +47,8 @@ const TMDB_NOT_FOUND = {
 
 let requests: Recorded[] = [];
 let tmdbStubs: TmdbStub[] = [];
+/** When set, Google's keys URL fails with this status. */
+let googleJwksFailure: number | undefined;
 let telegramMessageId = 0;
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -82,6 +85,7 @@ async function record(req: Request): Promise<Recorded> {
 
 function google(r: Recorded): Response {
   if (r.path !== '/oauth2/v3/certs') return json({ error: 'not_found' }, 404);
+  if (googleJwksFailure !== undefined) return json({ error: 'unavailable' }, googleJwksFailure);
   const { kty, n, e } = googlePublicJwk;
   return json({ keys: [{ kty, n, e, alg: 'RS256', use: 'sig', kid: GOOGLE_KEY_ID }] });
 }
@@ -137,11 +141,16 @@ async function control(req: Request): Promise<Response> {
     case 'POST /__reset':
       requests = [];
       tmdbStubs = [];
+      googleJwksFailure = undefined;
       return json({ ok: true });
     case 'POST /__google/id-token': {
       const { claims, kid = GOOGLE_KEY_ID } = (await req.json()) as { claims: Record<string, unknown>; kid?: string };
       const privateJwk = { ...(await crypto.subtle.exportKey('jwk', googleKeys.privateKey)), kid };
       return json({ idToken: await sign(claims, privateJwk, 'RS256') });
+    }
+    case 'POST /__google/jwks': {
+      ({ status: googleJwksFailure } = (await req.json()) as { status: number });
+      return json({ ok: true });
     }
     case 'POST /__tmdb': {
       const { path, query = {}, status = 200, body } = (await req.json()) as Partial<TmdbStub> & { path: string };

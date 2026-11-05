@@ -44,7 +44,7 @@ const app = createApp({
     await db.execute(sql`SELECT 1`);
   },
   movieService: new MovieService(db),
-  ratingService: new RatingService(db, new MovieResolver(db, tmdb), ratingNotifier),
+  ratingService: new RatingService(db, new MovieResolver(db, tmdb), ratingNotifier, logger),
   titleSearchService: new TitleSearchService(db, tmdb, logger),
   userDirectory: new UserDirectory(db),
   googleIdTokenVerifier: new GoogleIdTokenVerifier({ ...config.google, timeoutMs: 5000 }),

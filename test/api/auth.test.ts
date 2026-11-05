@@ -1,9 +1,9 @@
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test';
 import type { GoogleAccount } from './support/mock';
 import { users } from '../fixtures/dataset';
 import { resetDatabase } from './support/database';
 import { get, post, sessionCookie } from './support/http';
-import { googleIdToken } from './support/mock';
+import { failGoogleJwks, googleIdToken, resetMock } from './support/mock';
 import { userById } from './support/oracle';
 import { problemSchema, userResponseSchema } from './support/schemas';
 import { sessionFor, signIn } from './support/session';
@@ -77,6 +77,26 @@ describe('auth', () => {
       expect(response.status).toBe(401);
       expect(problemSchema.parse(response.body).detail).toBe('Não foi possível entrar com o Google. Tente de novo.');
       expect(sessionCookie(response)).toBeUndefined();
+    });
+
+    describe('while Google\'s keys can\'t be fetched', () => {
+      afterEach(resetMock);
+
+      test('a token signed with a key the app hasn\'t seen: 502, no cookie', async () => {
+        await failGoogleJwks(503);
+        const credential = await googleIdToken(anaAtGoogle, {}, 'rotated-key');
+        const response = await post('/auth/google', { json: { credential } });
+
+        expect(response.status).toBe(502);
+        expect(problemSchema.parse(response.body).detail)
+          .toBe('Não foi possível falar com o Google agora. Tente de novo.');
+        expect(sessionCookie(response)).toBeUndefined();
+      });
+
+      test('garbage instead of an ID token: still 401', async () => {
+        await failGoogleJwks(503);
+        expect((await post('/auth/google', { json: { credential: 'not-a-jwt' } })).status).toBe(401);
+      });
     });
 
     test('garbage instead of an ID token: 401', async () => {

@@ -93,4 +93,19 @@ describe('GoogleIdTokenVerifier', () => {
     expect(await instance.verify(await sign(claims(), 'secret', 'HS256'))).toBeUndefined();
     expect(await instance.verify('not-a-jwt')).toBeUndefined();
   });
+
+  test('Google\'s keys failing to load throws, so it is told apart from an invalid token', async () => {
+    const instance = new GoogleIdTokenVerifier({
+      clientId: CLIENT_ID,
+      jwksUrl: 'https://keys.test/certs',
+      timeoutMs: 1000,
+      fetch: () => Promise.resolve(new Response('unavailable', { status: 503 })),
+    });
+
+    const token = await sign(claims(), privateJwk, 'RS256');
+    const failure = await instance.verify(token).then(() => undefined, (error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('503');
+  });
 });

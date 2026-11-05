@@ -38,15 +38,28 @@ export interface GoogleAccount {
   picture?: string;
 }
 
-/** A Google ID token for this account, signed with the keys the mock publishes as Google's. */
-export async function googleIdToken(account: GoogleAccount, overrides: Record<string, unknown> = {}): Promise<string> {
+/**
+ * A Google ID token for this account, signed with the keys the mock publishes as Google's. A `kid` the app hasn't
+ * seen makes it fetch Google's keys again.
+ */
+export async function googleIdToken(
+  account: GoogleAccount,
+  overrides: Record<string, unknown> = {},
+  kid?: string,
+): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const claims = {
     iss: 'https://accounts.google.com', aud: googleClientId, email_verified: true, iat: now, exp: now + 3600,
     ...account, ...overrides,
   };
-  const { idToken } = z.object({ idToken: z.string() }).parse(await control('POST', '/__google/id-token', { claims }));
+  const response = await control('POST', '/__google/id-token', { claims, kid });
+  const { idToken } = z.object({ idToken: z.string() }).parse(response);
   return idToken;
+}
+
+/** Makes Google's keys URL answer this (error) status until the mock is reset. */
+export async function failGoogleJwks(status = 503): Promise<void> {
+  await control('POST', '/__google/jwks', { status });
 }
 
 /** Makes TMDb answer `body` for this path (and these query parameters, if given). */

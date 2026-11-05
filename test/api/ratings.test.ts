@@ -64,7 +64,7 @@ describe('POST /ratings', () => {
       [{ movieId: '4', rating: 'GOOD' }, 'Informe o título.'],
       [{ movieId: 4.5, rating: 'GOOD' }, 'Informe o título.'],
       [{ movieId: 0, rating: 'GOOD' }, 'Informe o título.'],
-      [{ movieId: 2 ** 31, rating: 'GOOD' }, 'Informe o título.'],
+      [{ movieId: 1_000_000_000_000_000, rating: 'GOOD' }, 'Informe o título.'],
       [{ movieId: 4 }, 'Escolha uma avaliação.'],
       [{ url: '   ', rating: 'GOOD' }, 'Informe o link do IMDb ou do TMDb.'],
       [{ url: 'https://www.imdb.com/title/tt1000004/' }, 'Escolha uma avaliação.'],
@@ -76,15 +76,56 @@ describe('POST /ratings', () => {
     ])('%j', async (body, message) => {
       await expectProblem(rate(1, body), 422, message);
     });
+  });
 
-    test('a title TMDb doesn\'t know', async () => {
-      await expectProblem(rate(1, { url: 'https://www.themoviedb.org/movie/999999999', rating: 'GOOD' }),
-        422, 'Não encontramos esse título no TMDb.');
+  test.each([999_999, 2 ** 31, 999_999_999_999_999])('an unknown movie id (%d): 404', async movieId => {
+    await expectProblem(rate(1, { movieId, rating: 'GOOD' }), 404, 'Título não encontrado.');
+  });
+
+  describe('a title TMDb doesn\'t know: 404, no field errors', () => {
+    test('a TMDb link TMDb answers 404 for', async () => {
+      const { status, body } = await rate(1, { url: 'https://www.themoviedb.org/movie/999999999', rating: 'GOOD' });
+
+      expect(status).toBe(404);
+      expect(problemSchema.parse(body)).toMatchObject({ detail: 'Não encontramos esse título no TMDb.' });
+      expect(body).not.toHaveProperty('errors');
+    });
+
+    test('an IMDb link TMDb\'s find has no result for', async () => {
+      await stubTmdb('/3/find/tt9999999', { movie_results: [], tv_results: [], person_results: [] });
+      const { status, body } = await rate(1, { url: 'https://www.imdb.com/title/tt9999999/', rating: 'GOOD' });
+
+      expect(status).toBe(404);
+      expect(problemSchema.parse(body)).toMatchObject({ detail: 'Não encontramos esse título no TMDb.' });
+      expect(body).not.toHaveProperty('errors');
     });
   });
 
-  test('an unknown movie id: 404', async () => {
-    await expectProblem(rate(1, { movieId: 999_999, rating: 'GOOD' }), 404, 'Título não encontrado.');
+  describe('TMDb failing: 502, and nothing is stored or posted', () => {
+    test.each([
+      ['find answering 500', '/3/find/tt8888888', 500, 'https://www.imdb.com/title/tt8888888/'],
+      ['find answering 429', '/3/find/tt8888888', 429, 'https://www.imdb.com/title/tt8888888/'],
+      ['the title fetch answering 503', '/3/movie/888888', 503, 'https://www.themoviedb.org/movie/888888'],
+      ['the title fetch answering 429', '/3/tv/888888', 429, 'https://www.themoviedb.org/tv/888888'],
+    ])('%s', async (_, path, status, url) => {
+      await stubTmdb(path, { status_code: 25, status_message: 'TMDb is failing.' }, {}, status);
+
+      // Twice: had the first attempt stored the title, the second would find it here and rate it without TMDb.
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        await expectProblem(rate(3, { url, rating: 'GOOD' }),
+          502, 'Não foi possível falar com o TMDb agora. Tente de novo.');
+      }
+      await Bun.sleep(200);
+      expect(await telegramMessages()).toEqual([]);
+    });
+
+    test('an IMDb link whose title fetch fails', async () => {
+      await stubTmdb('/3/find/tt7777777', { movie_results: [{ id: 777777 }], tv_results: [] });
+      await stubTmdb('/3/movie/777777', { status_code: 11, status_message: 'Internal error.' }, {}, 500);
+
+      await expectProblem(rate(3, { url: 'https://www.imdb.com/title/tt7777777/', rating: 'GOOD' }),
+        502, 'Não foi possível falar com o TMDb agora. Tente de novo.');
+    });
   });
 
   test('rating a movie twice by its id: 409', async () => {

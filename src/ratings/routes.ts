@@ -15,10 +15,14 @@ const MESSAGES = {
   commentTooLong: 'O comentário pode ter no máximo 2000 caracteres.',
 };
 
+/** Same range as `GET /movies/{id}`: up to 15 digits, so the id is a safe integer. */
+const MAX_MOVIE_ID = 999_999_999_999_999;
+
 /** Rates either a title by its link or a movie already here by its id: exactly one of `url` and `movieId`. */
 const newRatingBody = z.object({
   url: z.string({ error: MESSAGES.urlRequired }).trim().min(1, MESSAGES.urlRequired).optional(),
-  movieId: z.int32({ error: MESSAGES.titleRequired }).positive(MESSAGES.titleRequired).optional(),
+  movieId: z.int({ error: MESSAGES.titleRequired }).positive(MESSAGES.titleRequired)
+    .max(MAX_MOVIE_ID, MESSAGES.titleRequired).optional(),
   rating: z.enum(RATING_KEYS, { error: MESSAGES.ratingRequired }),
   /** Empty or missing: no comment. */
   comment: z.string().trim().max(2000, MESSAGES.commentTooLong).nullish()

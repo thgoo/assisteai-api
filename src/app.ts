@@ -71,7 +71,7 @@ export function createApp(deps: AppDependencies): Hono {
       return problemResponse(c, problem(503, 'Banco de dados indisponível.'));
     }
   });
-  app.route('/', createAuthRoutes(auth));
+  app.route('/', createAuthRoutes({ ...auth, logger }));
   app.route('/movies', createMovieRoutes({ movieService, ...auth }));
   app.route('/genres', createGenreRoutes({ movieService }));
   app.route('/users', createUserRoutes({ userDirectory }));
